@@ -1,23 +1,911 @@
----
-layout: none
----
 <?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
         <channel>
-            <title>{{ site.name | xml_escape }}</title>
-            <description>{% if site.description %}{{ site.description | xml_escape }}{% endif %}</description>      
-            <link>{{ site.url }}</link>
-            <atom:link href="{{ site.url }}/feed.xml" rel="self" type="application/rss+xml" />
-                {% for post in site.posts limit:10 %}
-                    {% unless post.tags contains 'draft' %}
+            <title></title>
+            <description></description>      
+            <link></link>
+            <atom:link href="/feed.xml" rel="self" type="application/rss+xml" />
+                
+                    
                         <item>
-                            <title>{{ post.title | xml_escape }}</title>
-                            <description>{{ post.content | xml_escape }}</description>
-                            <pubDate>{{ post.date | date: "%a, %d %b %Y %H:%M:%S %z" }}</pubDate>
-                            <link>{{ site.url }}{{ post.url }}</link>
-                            <guid isPermaLink="true">{{ site.url }}{{ post.url }}</guid>
+                            <title>Ray: A Distributed Framework for Emerging AI Applications</title>
+                            <description>&lt;p&gt;&lt;a href=&quot;https://www.usenix.org/system/files/osdi18-moritz.pdf&quot;&gt;Ray: A Distributed Framework for Emerging AI Applications&lt;/a&gt; Moritz, Nishihara, Wang et. al.&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;This week I decided to revisit a paper from the 2018 edition of OSDI (Operating Systems Design and Impelementation). In the coming few weeks, I will likely be reading the &lt;a href=&quot;https://sigops.org/s/conferences/hotos/2021/&quot;&gt;new crop of papers from HotOS 2021&lt;/a&gt;. If there are any that look particuarly exciting to you, feel free to ping me on &lt;a href=&quot;https://twitter.com/micahlerner&quot;&gt;Twitter&lt;/a&gt;!&lt;/em&gt;&lt;/p&gt;
+
+&lt;p&gt;Ray is a thriving open-source project focused on &lt;a href=&quot;https://docs.google.com/document/d/1lAy0Owi-vPz2jEqBSaHNQcy2IBSDEHyXNOQZlGuj93c/preview#heading=h.ojukhb92k93n0&quot;&gt;“providing a universal API for distributed computing”&lt;/a&gt; - in other words, trying to build primitives that allow applications to easily run and scale (even across multi-cloud environments), using an actor-like framework. There are a few exciting &lt;a href=&quot;https://www.youtube.com/watch?v=8GTd8Y_JGTQ&quot;&gt;demos&lt;/a&gt; which show how easy it is to parallelize computation&lt;label for=&quot;Anyscale&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;Anyscale&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;The demos are from Anyscale, a company founded by several original authors of the paper. Apache Spark is to Databricks, as Anyscale is to Ray. &lt;/span&gt;. The idea that (somewhat) unlimited cloud resources could be used to drastically speed up developer workflows is an exciting area of research - for a specific use case see &lt;a href=&quot;https://stanford.edu/~sadjad/gg-paper.pdf&quot;&gt;From Laptop to Lambda:  Outsourcing Everyday Jobs to Thousands  of Transient Functional Containers&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;While the current vision of the project has changed from the published paper (which came out of Berkeley’s &lt;a href=&quot;https://rise.cs.berkeley.edu/&quot;&gt;RISELab&lt;/a&gt;&lt;label for=&quot;rise&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;rise&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;The RISELab is the &lt;a href=&quot;https://engineering.berkeley.edu/news/2017/01/berkeley-launches-riselab-enabling-computers-to-make-intelligent-real-time-decisions/&quot;&gt;“successor to the AMPLab”&lt;/a&gt;, where Apache Spark, Apache Mesos, and other “big data” technologies were originally developed) &lt;/span&gt;), it is still interesting to reflect on the original architecture and motivation.&lt;/p&gt;
+
+&lt;p&gt;Ray was originally developed with the goal of supporting modern RL applications that must:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Execute large numbers of millisecond-level computations (for example, in response to user requests)&lt;/li&gt;
+  &lt;li&gt;Execute workloads on heterogenous resources (running some system workloads on CPUs and others on GPUs)&lt;/li&gt;
+  &lt;li&gt;Quickly adapt to new inputs that impact a reinforcement-learning simulation&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;The authors argue that existing architectures for RL weren’t able to achieve these goals because of their a-la-carte design - even though technologies existed to solve individual problems associated with running RL models in production, no individual solution was able to cover all of the aforementioned requirements.&lt;/p&gt;
+
+&lt;h2 id=&quot;what-are-the-papers-contributions&quot;&gt;What are the paper’s contributions?&lt;/h2&gt;
+
+&lt;p&gt;The Ray paper has three main contributions: a generic system designed to train, simulate, and server RL models, the &lt;em&gt;design and architecture&lt;/em&gt; of that system, and a &lt;em&gt;programming model&lt;/em&gt; used to write workloads that run on the system. We will dive into the programming and computation model first, as they are key to understanding the rest of the system.&lt;/p&gt;
+
+&lt;h2 id=&quot;programming-and-computation-model&quot;&gt;Programming and computation model&lt;/h2&gt;
+
+&lt;p&gt;Applications that run on Ray are made up of runnable subcomponents with two types: &lt;em&gt;tasks&lt;/em&gt; or &lt;em&gt;actors&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;Tasks&lt;/em&gt; are a stateless function execution that rely on their inputs in order to produce a future result (futures are a common abstraction in asynchronous frameworks&lt;label for=&quot;futures&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;futures&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;For more on futures, I would recommend &lt;a href=&quot;http://dist-prog-book.com/chapter/2/futures.html&quot;&gt;Heather Miller’s book on  Programming Models for Distributed Computing&lt;/a&gt;. &lt;/span&gt;). A programmer can make a future depend on another future’s result, like one would be able to in most asynch programming frameworks.&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;Actors&lt;/em&gt; are functions that represent a stateful computation (like a counter), and can depend on or be depended on by other computations. Because they require maintenance of state, they are also more difficult to implement (for example, how is the state recovered in event of failure?).&lt;/p&gt;
+
+&lt;p&gt;Resources can be explicitly allocated to &lt;em&gt;tasks&lt;/em&gt; and &lt;em&gt;actors&lt;/em&gt; - for example, an &lt;em&gt;actor&lt;/em&gt; can be annotated with the number of GPUs is needs.&lt;/p&gt;
+
+&lt;p&gt;Because &lt;em&gt;Tasks&lt;/em&gt; and &lt;em&gt;Actors&lt;/em&gt; in an application can depend on one another, Ray represents their execution as a graph. The nodes in the graph are computation or state that computation produces, while the edges in the graph describe relationships between computations and/or data. Representing computation as a graph allows the state of an application be to re-executed as needed - for example, if part of the state is stored on a node that fails, that state can be recovered &lt;label for=&quot;lineage&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;lineage&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Several of the authors dig further into representing lineage in a future paper &lt;a href=&quot;https://dl.acm.org/doi/pdf/10.1145/3341301.3359653&quot;&gt;here&lt;/a&gt;. &lt;/span&gt;.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/ray/api.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;To instatiate &lt;em&gt;tasks&lt;/em&gt; and &lt;em&gt;actors&lt;/em&gt;, Ray provides a developer API in Python (and now in other languages). To initialize a remote function, a developer can add the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;@ray.remote&lt;/code&gt; decorator. The example below (from the open source project docs &lt;a href=&quot;https://github.com/ray-project/ray#quick-start&quot;&gt;here&lt;/a&gt;) shows how one would create a remote function to square a range of numbers, then wait on the results.&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;import ray
+ray.init()
+
+@ray.remote
+def f(x):
+    return x * x
+
+futures = [f.remote(i) for i in range(4)]
+print(ray.get(futures))
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h2 id=&quot;architecture&quot;&gt;Architecture&lt;/h2&gt;
+
+&lt;p&gt;Ray aims to run &lt;em&gt;Tasks&lt;/em&gt; and &lt;em&gt;Actors&lt;/em&gt; created by developers in a fault-tolerant manner. To do so, it implements a distributed system containing two layers: the &lt;em&gt;Application Layer&lt;/em&gt; and the &lt;em&gt;System Layer&lt;/em&gt;.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/ray/arch.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;h3 id=&quot;the-application-layer&quot;&gt;The Application Layer&lt;/h3&gt;
+&lt;p&gt;The &lt;em&gt;Application Layer&lt;/em&gt; has three components: a singleton &lt;em&gt;driver&lt;/em&gt; (which orchestrates a specific user program on the cluster), &lt;em&gt;workers&lt;/em&gt; (processes that run tasks), and &lt;em&gt;actors&lt;/em&gt; (which as the name suggests, run &lt;em&gt;Actors&lt;/em&gt; mentioned in the previous section).&lt;/p&gt;
+
+&lt;h3 id=&quot;the-system-layer&quot;&gt;The System Layer&lt;/h3&gt;
+&lt;p&gt;The &lt;em&gt;System Layer&lt;/em&gt; is significantly more complex, and comprises three components: a &lt;em&gt;Global Control Store&lt;/em&gt; (which maintains state of the system), a &lt;em&gt;scheduler&lt;/em&gt; (which coordinates running computation), and a &lt;em&gt;distributed object store&lt;/em&gt; (which store the input and output of computation).&lt;/p&gt;
+
+&lt;p&gt;The &lt;em&gt;Global Control Store&lt;/em&gt; (a.k.a. GCS) is a key-value store that maintains the state of the system. One of its key functions is maintaining the lineage of execution so that the system can recover in the event of failure. The authors argue that separating the system metadata from the scheduler allows every other component of the system to be stateless (making it easier to reason about how to recover if the different subcomponents fail).&lt;/p&gt;
+
+&lt;p&gt;The original paper does not dive into the subcomponents of the &lt;em&gt;GCS&lt;/em&gt;, but the &lt;a href=&quot;https://docs.google.com/document/d/1lAy0Owi-vPz2jEqBSaHNQcy2IBSDEHyXNOQZlGuj93c/preview#&quot;&gt;Ray v1.x Architecture paper&lt;/a&gt; provides more context on how components work (or in some cases, how they have been reworked). One of the most important subystems from the original paper was the &lt;em&gt;Object Table&lt;/em&gt;, which stores locations of values used by Ray operations - for example, on which node a task is storing its output. We will see the &lt;em&gt;Object Table&lt;/em&gt; again in the end-to-end example section of the paper review.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/ray/scheduler.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;The &lt;em&gt;Scheduler&lt;/em&gt; operates “bottoms up” in order to assign the execution of a function to a specific node in the cluster. In contrast to existing schedulers, the Ray scheduler aims to schedule millions of tasks per second (where the tasks are possibly short lived), while also taking into account data locality&lt;label for=&quot;assumptions&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;assumptions&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;The paper also mentions other assumptions that existing schedulers make - other schedulers “assume tasks belong to independent jobs, or assume the computation graph is known.” &lt;/span&gt;. Data locality matters for scheduling because the output of computation will end up on a specific node - transferring that data to another node incurs overhead. The scheduler is called “bottoms up” because tasks are first submitted to a local scheduler, only bubbling up to a global scheduler if they cannot be scheduled on the local machine.&lt;/p&gt;
+
+&lt;p&gt;Lastly, the &lt;em&gt;distributed object store&lt;/em&gt; stores immutable inputs and outputs of every task in memory, transferring the inputs for a task to a different machine if needed (for example, if the local scheduler can’t find resources).&lt;/p&gt;
+
+&lt;h3 id=&quot;running-an-application-in-ray&quot;&gt;Running an application in Ray&lt;/h3&gt;
+
+&lt;p&gt;Now that we have an understanding of the different components of Ray, lets walk through an example execution (as described in the original paper)&lt;label for=&quot;caveat&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;caveat&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;I will caveat this section of the paper review with the fact that Ray has changed significantly, and not all functionality may have stayed exactly the same - even so, understanding how the different components fit together is interesting. &lt;/span&gt;.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/ray/execute.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;The execution involves adding the results of two existing Ray tasks (using a call to &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;add.remote(a, b)&lt;/code&gt;). To begin, a function execution is initiated and submitted for scheduling on the local node (&lt;em&gt;N1&lt;/em&gt;). The scheduling request is then forwarded to the &lt;em&gt;Global Scheduler&lt;/em&gt; (possibly because the original node didn’t have enough capacity). The &lt;em&gt;Global Scheduler&lt;/em&gt; checks the &lt;em&gt;Object Table&lt;/em&gt; (which stores task outputs and their locations) for the location of the outputs of the &lt;em&gt;a&lt;/em&gt; and &lt;em&gt;b&lt;/em&gt; tasks. Then, the &lt;em&gt;Global Scheduler&lt;/em&gt; assigns the new computation to a different node (&lt;em&gt;N2&lt;/em&gt;). &lt;em&gt;N2&lt;/em&gt; only has the outputs of &lt;em&gt;b&lt;/em&gt;, so it needs to fetch the outputs of &lt;em&gt;a&lt;/em&gt; from a remote node. In order to fetch &lt;em&gt;a&lt;/em&gt;, &lt;em&gt;N2&lt;/em&gt; makes a call to the &lt;em&gt;GCS&lt;/em&gt; in order to determine where the other output (&lt;em&gt;a&lt;/em&gt;) is stored, then fetches the output. Lastly, execution begins on &lt;em&gt;N2&lt;/em&gt;.&lt;/p&gt;
+&lt;h2 id=&quot;evaluation-and-microbenchmarks&quot;&gt;Evaluation and microbenchmarks&lt;/h2&gt;
+
+&lt;p&gt;The original paper evaluates whether Ray achieves the desired goal of being able to schedule millions of tasks with variable running times, and whether doing so on heterogenous architecture provides any benefits. A few of the benchmarks stick out to me, primarily those that show how Ray is able to take advantage of heterogenous computing resources.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/ray/ppo.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;Ray is primarily impressive in this regard:&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Ray implementation out-performs the optimized MPI implementation in all experiments, while using a fraction of the GPUs. The reason is that Ray is heterogeneity-aware and allows the user to utilize asymmetric architectures by expressing resource requirements at the granularity of a task or actor. The Ray implementation can then leverage TensorFlow’s single-process multi-GPU support and can pin objects in GPU memory when possible. This optimization cannot be easily ported to MPI due to the need to asynchronously gather rollouts to a single GPU process&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;For the Proximal Policy Optimization (PPO) algorithm (more information &lt;a href=&quot;https://openai.com/blog/openai-baselines-ppo/&quot;&gt;on PPO&lt;/a&gt;), the system is able to scale much better than an OpenMPI alternative: “Ray’s fault tolerance and resource-aware scheduling together cut costs by 18×.”&lt;/p&gt;
+
+&lt;h2 id=&quot;conclusion&quot;&gt;Conclusion&lt;/h2&gt;
+
+&lt;p&gt;While originally designed as a system for RL applications, Ray is paving an exciting path forward in computing by providing abstractions on top of cloud resources (in particular, I’m excited to see how the projects innovates in multi-cloud deployments). They have an detailed design document for the new version of the system &lt;a href=&quot;https://docs.google.com/document/d/1lAy0Owi-vPz2jEqBSaHNQcy2IBSDEHyXNOQZlGuj93c/preview#&quot;&gt;here&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;If you find this paper interesting, &lt;a href=&quot;https://raysummit.anyscale.com/speakers&quot;&gt;Ray Summit&lt;/a&gt; was last week and covers various Ray system internals (in addition to discussions of the technology being adopted in industry).&lt;/p&gt;
+</description>
+                            <pubDate>Sun, 27 Jun 2021 00:00:00 -0700</pubDate>
+                            <link>/2021/06/27/ray-a-distributed-framework-for-emerging-ai-applications.html</link>
+                            <guid isPermaLink="true">/2021/06/27/ray-a-distributed-framework-for-emerging-ai-applications.html</guid>
                         </item>
-                    {% endunless %}
-                {% endfor %}
+                    
+                
+                    
+                        <item>
+                            <title>Firecracker: Lightweight Virtualization for Serverless Applications</title>
+                            <description>&lt;p&gt;&lt;a href=&quot;https://www.usenix.org/conference/nsdi20/presentation/agache&quot;&gt;Firecracker: Lightweight Virtualization for Serverless Applications&lt;/a&gt; Agache et al., NSDI ‘20&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;This week’s paper review is a bit different than the past few weeks (which have been about distributed key-value stores). Inspired by all of the neat projects being built with the technology discussed in this paper, I decided to learn more. Enjoy!&lt;/em&gt;&lt;/p&gt;
+
+&lt;p&gt;Firecracker is a high-performance virtualization solution built to run Amazon’s serverless&lt;label for=&quot;serverless&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;serverless&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Serverless meaning that the resources for running a workload are provided on-demand, rather than being paid for over a prolonged time-period. Martin Fowler has some great docs on the topic &lt;a href=&quot;https://martinfowler.com/articles/serverless.html&quot;&gt;here&lt;/a&gt;. &lt;/span&gt; applications securely and with minimal resources. It now does so at immense scale (at the time the paper was published, it supported “millions of production workloads, and trillions of requests per month”).&lt;/p&gt;
+
+&lt;p&gt;Since the paper was published, there has a been a buzz of interesting projects built with Firecracker. &lt;a href=&quot;https://fly.io&quot;&gt;Fly.io&lt;/a&gt; (a speed-focused platform for running Docker applications&lt;label for=&quot;fly&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;fly&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Apologies if a Fly.io engineer reads this and has a different short summary of the company. I did my best. &lt;/span&gt;) wrote about using the technology on their &lt;a href=&quot;https://fly.io/blog/sandboxing-and-workload-isolation/&quot;&gt;blog&lt;/a&gt;, &lt;a href=&quot;https://jvns.ca&quot;&gt;Julia Evans&lt;/a&gt; wrote about booting them up for a &lt;a href=&quot;https://jvns.ca/blog/2021/01/23/firecracker--start-a-vm-in-less-than-a-second/&quot;&gt;CTF she was building&lt;/a&gt;, and &lt;a href=&quot;https://github.com/weaveworks/ignite&quot;&gt;Weave Ingite&lt;/a&gt; lets you launch virtual machines from Docker&lt;label for=&quot;vms&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;vms&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Virtual machines and containers are sometimes conflated to be one and the same, but the internals are different. The difference is discussed later in this paper review! :) &lt;/span&gt; containers (and other &lt;a href=&quot;https://opencontainers.org/&quot;&gt;OCI&lt;/a&gt;&lt;label for=&quot;oci&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;oci&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;OCI stands for “Open Container Initiative” and works to define standards for containers and the software that runs them. A nice thing about OCI containers is that you can run them (with a container runtime) that complies with the standards, but has different internals. For example, one could choose &lt;a href=&quot;https://podman.io/&quot;&gt;Podman&lt;/a&gt; instead of Docker. &lt;/span&gt; images).&lt;/p&gt;
+
+&lt;p&gt;Now that you are excited about Firecracker, let’s jump into the paper!&lt;/p&gt;
+
+&lt;h2 id=&quot;what-are-the-papers-contributions&quot;&gt;What are the paper’s contributions?&lt;/h2&gt;
+
+&lt;p&gt;There are two main contributions from the paper: the Firecracker system itself (already discussed above), and the usage of Firecracker to power AWS Lambda (Amazon’s platform for running serverless workloads).&lt;/p&gt;
+
+&lt;p&gt;Before we go further, it is important to understand the motivation behind building Firecracker in the first place.&lt;/p&gt;
+
+&lt;p&gt;Originally, Lambda functions ran on a separate virtual machine (VM) for every customer (although functions from the same customer would run in the same VM). Allocating a separate VM for every customer was great for isolating customers from each other - you wouldn’t want Company A to access Company B’s code or functionality, nor for Company A’s greedy resource consumption to starve Company B’s Lambdas of resources.&lt;/p&gt;
+
+&lt;p&gt;Unfortunately, existing VM solutions required significant resources, and resulted in non-optimal utilization. For example, a customer might have a VM allocated to them, but the VM is not frequently used. Even though the VM isn’t used to its full capacity, there is still memory and CPU being consumed to run the VM. The Lambda system in this form was less-efficient, meaning it required more resources to scale (likely making the system more expensive for customers).&lt;/p&gt;
+
+&lt;p&gt;With the goal of increasing utilization (and lowering cost), the team established constraints of a possible future solution:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;em&gt;Overhead and density&lt;/em&gt;: Run “thousands of functions on a single machine, with minimal waste”. In other words, solving one of the main problems of the existing architecture.&lt;/li&gt;
+  &lt;li&gt;&lt;em&gt;Isolation&lt;/em&gt;: Ensure that applications are completely separate from one another (can’t read each other’s data, nor learn about them through side channels). The existing solution had this property, but at high cost.&lt;/li&gt;
+  &lt;li&gt;&lt;em&gt;Performance&lt;/em&gt;: A new solution should have the same or better performance as before.&lt;/li&gt;
+  &lt;li&gt;&lt;em&gt;Compatibility&lt;/em&gt;: Run any binary “without code changes or recompilation”. &lt;label for=&quot;compat&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;compat&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;This requirement was there, even though Lambda oringally supported a small set of languages. Making a generic solution was planning for the long-term! &lt;/span&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;em&gt;Fast Switching&lt;/em&gt;: “It must be possible to start new functions and clean up old functions quickly”.&lt;/li&gt;
+  &lt;li&gt;&lt;em&gt;Soft Allocation&lt;/em&gt;: “It must be possible to over commit CPU, memory, and other resources”. This requirement impacts utilization (and in turn, the cost of the system to AWS/the customer). Overcommittment comes into play a few times during a Firecracker VM’s lifetime. For example, when it starts up, it theoretically is allocated resources, but may not be using them right away if it is performing set up work. Other times, the VM may need to burst above the configured soft-limit on resources, and would need to consume those of another VM. The paper note’s “We have tested memory and CPU oversubscription ratios of over 20x, and run in production with ratios as high as 10x, with no issues” - very neat!&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;The constraints were applied to three different categories of solutions: &lt;em&gt;Linux containers&lt;/em&gt;, &lt;em&gt;language-specific isolation&lt;/em&gt;, and &lt;em&gt;alternative virtualization solutions&lt;/em&gt; (they were already using virtualization, but wanted to consider a different option than their existing implementation).&lt;/p&gt;
+
+&lt;h3 id=&quot;linux-containers&quot;&gt;Linux containers&lt;/h3&gt;
+
+&lt;p&gt;There are several &lt;em&gt;Isolation&lt;/em&gt; downsides to using Linux containers.&lt;/p&gt;
+
+&lt;p&gt;First, Linux containers interact directly with a host OS using syscalls&lt;label for=&quot;syscalls&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;syscalls&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Syscalls are a standard way for programs to interact with an operating system. They’re really neat. I highly reccommend &lt;a href=&quot;http://beej.us/guide/bgnet/&quot;&gt;Beej’s guide to Network Programming&lt;/a&gt; for some fun syscall programming &lt;/span&gt;. One can lock-down which syscalls a program can make (the paper mentions using &lt;a href=&quot;https://www.kernel.org/doc/html/v4.16/userspace-api/seccomp_filter.html&quot;&gt;Seccomp BPF&lt;/a&gt;), and even which arguments the syscalls can use, as well as using other security features of container systems (the Fly.io article linked above discusses this topic in more depth).&lt;/p&gt;
+
+&lt;p&gt;Even using other Linux isolation features, at the end of the day the container is still interacting with the OS. That means that if customer code in the container figures out a way to pwn the OS, or figures out a side channel to determine state of another container, &lt;em&gt;Isolation&lt;/em&gt; might break down. Not great.&lt;/p&gt;
+
+&lt;h3 id=&quot;language-specific-isolation&quot;&gt;Language-specific isolation&lt;/h3&gt;
+
+&lt;p&gt;While there are ways to run language-specific VMs (like the JVM for Java/Scala/Clojure or V8 for Javascript), this approach doesn’t scale well to many different languages (nor does it allow for a system that can run arbitrary binaries - one of the original design goals).&lt;/p&gt;
+
+&lt;h3 id=&quot;alternative-virtualization-solutions&quot;&gt;Alternative Virtualization Solutions&lt;/h3&gt;
+
+&lt;p&gt;Revisiting virtualization led to a focus on what about the existing virtualization approach was holding Lambda back:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;em&gt;Isolation&lt;/em&gt;: the code associated with the components of virtualization are lengthy (meaning more possible areas of exploitation), and &lt;a href=&quot;https://www.computerworld.com/article/3182877/pwn2own-ends-with-two-virtual-machine-escapes.html&quot;&gt;researchers have escaped from virtual machines before&lt;/a&gt;.&lt;/li&gt;
+  &lt;li&gt;&lt;em&gt;Overhead and density&lt;/em&gt;: the components of virtualization (which we will get into further down) require too many resources, leading to low utilization&lt;/li&gt;
+  &lt;li&gt;&lt;em&gt;Fast switching&lt;/em&gt;: VMs take a while to boot and shut down, which doesn’t mesh well with Lambda functions that need a VM quickly and may only use it for a few seconds (or less).&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;The team then applied the above requirements to the main components of the virtualization system: the hypervisor and the virtual machine monitor.&lt;/p&gt;
+
+&lt;p&gt;First, the team considered which &lt;em&gt;type&lt;/em&gt; of hypervisor to choose. There are two types of hypervisors, Type 1 and Type 2. The textbook definitions of hypervisors say that Type 1 hypervisors are integrated directly in the hardware, while Type 2 hypervisors run an operating system on top of the hardware (then run the hypervisor on top of that operating system).&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/firecracker/Hypervisor.svg&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;Type 1 vs Type 2 Hypervisors. Scsami, CC0, via Wikimedia Commons&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;Linux has a robust hypervisor built into the kernel, called &lt;a href=&quot;https://www.kernel.org/doc/ols/2007/ols2007v1-pages-225-230.pdf&quot;&gt;Kernel Virtual Machine&lt;/a&gt; (a.k.a. KVM) that is arguably a Type 1 hypervisor&lt;label for=&quot;type1&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;type1&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;&lt;a href=&quot;https://serverfault.com/questions/855094/is-kvm-a-type-1-or-type-2-hypervisor&quot;&gt;Different resources&lt;/a&gt; make &lt;a href=&quot;https://virtualizationreview.com/Blogs/Mental-Ward/2009/02/KVM-BareMetal-Hypervisor.aspx&quot;&gt;different arguments&lt;/a&gt; for whether KVM is a Type 1 or Type 2 hypervisor. &lt;/span&gt;.&lt;/p&gt;
+
+&lt;p&gt;Using a hypervisor like KVM allows for kernel components to be moved into userspace - if the kernel components are in user space and they get pwned, the host OS itself hasn’t been pwned. Linux provides an interface, &lt;a href=&quot;https://wiki.libvirt.org/page/Virtio&quot;&gt;virtio&lt;/a&gt;&lt;label for=&quot;virtio&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;virtio&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Fun fact: the author of the paper on virtio, Rusty Russell, is now a key developer of a main &lt;a href=&quot;https://github.com/ElementsProject/lightning&quot;&gt;Bitcoin Lightning implementation&lt;/a&gt;. &lt;/span&gt;, that allows the user space kernel components to interact with the host OS. Rather than passing all interactions with a guest kernel directly to the host kernel, some functions, in particular device interactions, go from a guest kernel to a &lt;em&gt;virtual machine monitor&lt;/em&gt; (a.k.a. VMM). One of the most popular VMMs is &lt;a href=&quot;https://www.usenix.org/legacy/publications/library/proceedings/usenix05/tech/freenix/full_papers/bellard/bellard.pdf&quot;&gt;QEMU&lt;/a&gt;.&lt;/p&gt;
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/firecracker/virt.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;Unfortunately, QEMU has a significant amount of code (again, more code means more potential attack surface), as it supports a full range of functionality - even functionality that a Lambda would never use, like USB drivers. Rather than trying to pare down QEMU, the team forked &lt;a href=&quot;https://opensource.google/projects/crosvm&quot;&gt;crosvm&lt;/a&gt;&lt;label for=&quot;crosvmfork&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;crosvmfork&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;I enjoyed &lt;a href=&quot;https://prilik.com/blog/post/crosvm-paravirt/&quot;&gt;this&lt;/a&gt; post on crosvm from a former Google intern. &lt;/span&gt; (a VMM open-sourced by Google, and developed for ChromeOS), in the process significantly rewriting core functionality for Firecracker’s use case. The end result was a slimmer library with only code that would conceivably be used by a Lambda - resulting in 50k lines of Rust (versus &amp;gt; 1.4 million lines of C in QEMU&lt;label for=&quot;QEMU&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;QEMU&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Relatedly, there was an interesting &lt;a href=&quot;http://blog.vmsplice.net/2020/08/why-qemu-should-move-from-c-to-rust.html&quot;&gt;blog post&lt;/a&gt; about QEMU security issues and thoughts on Rust from a QEMU maintainer. &lt;/span&gt;). Because the goal of Firecracker is to be as small as possible, the paper calls the project a &lt;em&gt;MicroVM&lt;/em&gt;, rather than “VM”.&lt;/p&gt;
+
+&lt;h2 id=&quot;how-do-firecracker-microvms-get-run-on-aws&quot;&gt;How do Firecracker MicroVMs get run on AWS?&lt;/h2&gt;
+
+&lt;p&gt;Now that we roughly understand how Firecracker works, let’s dive into how it is used in running Lambda. First, we will look at how the Lambda architecture works on a high level, followed by a look at how the running the Lambda itself works.&lt;/p&gt;
+
+&lt;h3 id=&quot;high-level-architecture-of-aws-lambda&quot;&gt;High-level architecture of AWS Lambda&lt;/h3&gt;
+
+&lt;p&gt;When a developer runs (or &lt;em&gt;Invokes&lt;/em&gt;, in AWS terminology) a Lambda, the ensuing HTTP request hits an AWS Load Balancer &lt;label for=&quot;aws&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;aws&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Lambdas can also start via other events - like ‘integrations with other AWS services including storage (S3), queue (SQS), streaming data (Kinesis) and database (DynamoDB) services.’ &lt;/span&gt;.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/firecracker/arch.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;There are a four main infrastructure components involved in running a Lambda once it has been invoked:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;em&gt;Workers&lt;/em&gt;: The components that actually run a Lambda’s code. Each worker runs many MicroVMs in “slots”, and other services schedule code to be run in the MicroVMs when a customer &lt;em&gt;Invokes&lt;/em&gt; a Lambda.&lt;/li&gt;
+  &lt;li&gt;&lt;em&gt;Frontend&lt;/em&gt;: The entrance into the Lambda system. It receives &lt;em&gt;Invoke&lt;/em&gt; requests, and communicates with the  &lt;em&gt;Worker Manager&lt;/em&gt; to determine where to run the Lambda, then directly communicates with the &lt;em&gt;Workers&lt;/em&gt;.&lt;/li&gt;
+  &lt;li&gt;&lt;em&gt;Worker Manager&lt;/em&gt;: Ensures that the same Lambda is routed to the same set of &lt;em&gt;Workers&lt;/em&gt; (this routing impacts performance for reasons that we will learn more about in the next section). It keeps tracks of where a Lambda has been scheduled previously. These previous runs correspond to “slots” for a function. If all of the slots for a function are in use, the &lt;em&gt;Worker Manager&lt;/em&gt; works with the &lt;em&gt;Placement&lt;/em&gt; service to find more slots in the &lt;em&gt;Workers&lt;/em&gt; fleet.&lt;/li&gt;
+  &lt;li&gt;&lt;em&gt;Placement&lt;/em&gt; service: Makes scheduling decisions when it needs to assign a Lambda invocation to a &lt;em&gt;Worker&lt;/em&gt;. It makes these decision in order to “optimize the placement of slots for a single function across the worker fleet, ensuring that the utilization of resources including CPU, memory, network, and storage is even across the fleet and the potential for correlated resource allocation on each individual worker is minimized”.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;lambda-worker-architecture&quot;&gt;Lambda worker architecture&lt;/h3&gt;
+
+&lt;p&gt;Each Lambda worker has thousands of individual &lt;em&gt;MicroVMs&lt;/em&gt; that map to a “slot”.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/firecracker/lambdaworker.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;Each MicroVM is associated with resource constraints (configured when a Lambda is setup) and communicates with several components that allow for scheduling, isolated execution, and teardown of customer code inside of a Lambda:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;em&gt;Firecracker VM&lt;/em&gt;: All of the goodness we talked about earlier.&lt;/li&gt;
+  &lt;li&gt;&lt;em&gt;Shim process&lt;/em&gt;: A process inside of the VM that communicates with an external side car called the &lt;em&gt;Micro Manager&lt;/em&gt;.&lt;/li&gt;
+  &lt;li&gt;&lt;em&gt;Micro Manager&lt;/em&gt;: a sidecar that communicates over TCP with a &lt;em&gt;Shim process&lt;/em&gt; running inside the VM. It reports metadata that it receives back to the &lt;em&gt;Placement&lt;/em&gt; service, and can be called by the &lt;em&gt;Frontend&lt;/em&gt; in order to &lt;em&gt;Invoke&lt;/em&gt; a specific function. On function completion, the &lt;em&gt;Micro Manager&lt;/em&gt; also receives the response from the &lt;em&gt;Shim process&lt;/em&gt; running inside the VM (passing it back to the client as needed).&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;While slots can be filled on demand, the &lt;em&gt;Micro Manager&lt;/em&gt; also starts up Firecracker VMs in advance - this helps with performance (as we will see in the next section).&lt;/p&gt;
+
+&lt;h2 id=&quot;performance&quot;&gt;Performance&lt;/h2&gt;
+
+&lt;p&gt;Firecracker was evaluated relative to similar VMM solutions on three dimensions: &lt;em&gt;boot times&lt;/em&gt;, &lt;em&gt;memory overhead&lt;/em&gt;, and &lt;em&gt;IO Performance&lt;/em&gt;. In these tests, Firecracker was compared to QEMU and Intel Cloud Hypervisor&lt;label for=&quot;crosvm&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;crosvm&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Interestingly, Firecracker wasn’t compared to crosvm. I am not sure if this is because it wasn’t possible, or whether the authors of the paper thought it wouldn’t be a fair comparison. &lt;/span&gt;. Additionally, there are two configurations of Firecracker used in the tests: Firecracker and Firecracker-pre. Because Firecracker MicroVMs are configured via API calls, the team tested setups where the API calls had completed (Firecracker-pre, where the “pre” means “pre-configured”) or had not completed (regular Firecracker). The timer for both of these configurations ended when the &lt;em&gt;init&lt;/em&gt; process in the VM started.&lt;/p&gt;
+
+&lt;h3 id=&quot;boot-times&quot;&gt;Boot times&lt;/h3&gt;
+
+&lt;p&gt;The boot time comparisons involved two configurations: booting 500 total MicroVMs serially, and booting 1000 total MicroVMs, 50 at a time (in parallel).&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/firecracker/boot_time.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;The bottom line from these tests is that Firecracker MicroVMs boot incredibly quickly - &lt;em&gt;Fast switching&lt;/em&gt; ✅ !&lt;/p&gt;
+
+&lt;h3 id=&quot;memory-overhead&quot;&gt;Memory overhead&lt;/h3&gt;
+
+&lt;p&gt;Relative to the other options, Firecracker uses significantly less memory - &lt;em&gt;overhead and density&lt;/em&gt; ✅!&lt;/p&gt;
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/firecracker/mem.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;h3 id=&quot;io-performance&quot;&gt;IO Performance&lt;/h3&gt;
+
+&lt;p&gt;Relative to the other options, Firecracker and the comparable solution of Intel’s Cloud Hypervisor didn’t perform well in all tests. The paper argues that the causes of relatively inferior performance in the IO tests are no flushing to disk and an implementation of block IOs that performs IO serially - the paper notes that “we expect to fix these limitations with time”. Digging into Github issues for Firecracker, I &lt;a href=&quot;https://github.com/firecracker-microvm/firecracker/issues/1600&quot;&gt;found one&lt;/a&gt; that indicates they were prototyping use of &lt;a href=&quot;https://unixism.net/loti/what_is_io_uring.html&quot;&gt;io_uring&lt;/a&gt; to support async IO (and increase IO performance).&lt;/p&gt;
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/firecracker/io.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;h2 id=&quot;conclusion&quot;&gt;Conclusion&lt;/h2&gt;
+
+&lt;p&gt;Firecracker was interesting to learn about because it is a high-performance, low overhead VMM written in Rust. The paper also is a great study in pragmatic technical decision making - rather than rewriting already robust software (KVM), the team focused on a specific component of an existing system to improve. Along the way, we learned about how different methods for &lt;em&gt;isolating&lt;/em&gt; customer workloads from each other &lt;label for=&quot;bpf&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;bpf&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;In particular, I thought seccomp-bpf was interesting and look forward to learning more about BPF/eBPF. First stop: &lt;a href=&quot;https://jvns.ca/blog/2017/06/28/notes-on-bpf---ebpf/&quot;&gt;Julia Evans’ guide&lt;/a&gt; &lt;/span&gt;.&lt;/p&gt;
+
+&lt;p&gt;If you made it this far, you probably enjoyed the paper review - I post them on my &lt;a href=&quot;https://twitter.com/micahlerner&quot;&gt;Twitter&lt;/a&gt; every week!&lt;/p&gt;
+</description>
+                            <pubDate>Thu, 17 Jun 2021 00:00:00 -0700</pubDate>
+                            <link>/2021/06/17/firecracker-lightweight-virtualization-for-serverless-applications.html</link>
+                            <guid isPermaLink="true">/2021/06/17/firecracker-lightweight-virtualization-for-serverless-applications.html</guid>
+                        </item>
+                    
+                
+                    
+                        <item>
+                            <title>FoundationDB: A Distributed Unbundled Transactional Key Value Store</title>
+                            <description>&lt;p&gt;&lt;a href=&quot;https://www.foundationdb.org/files/fdb-paper.pdf&quot;&gt;FoundationDB: A Distributed Unbundled Transactional Key Value Store&lt;/a&gt; Zhou, et al., 2021&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;I heard good things about FoundationDB&lt;label for=&quot;jepsen&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;jepsen&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;In particular, I read that FoundationDB passed Jepsen testing &lt;a href=&quot;https://web.archive.org/web/20150312112556/http://blog.foundationdb.com/foundationdb-vs-the-new-jepsen-and-why-you-should-care&quot;&gt;“with flying colors on their first try”&lt;/a&gt; and saw that there were many happy users of the system on &lt;a href=&quot;https://news.ycombinator.com/item?id=27424605&quot;&gt;Hacker News&lt;/a&gt;. &lt;/span&gt;, so after seeing that their paper was accepted to SIGMOD’21 (and made available), I decided to read it this week. Enjoy!&lt;/em&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;what-is-foundationdb&quot;&gt;What is FoundationDB?&lt;/h2&gt;
+
+&lt;p&gt;The paper discusses a distributed key value store that Apple, Snowflake, and  VMWare (among others) run core services on at immense scale&lt;label for=&quot;cloudkit&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;cloudkit&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Apple’s CloudKit is built on FoundationDB, in addition to other services (as described in &lt;a href=&quot;https://www.foundationdb.org/blog/fdb-paper/&quot;&gt;their SIGMOD’21 announcement&lt;/a&gt;). Snowflake’s usage of FoundationDB is explained in this &lt;a href=&quot;https://www.youtube.com/watch?v=OJb8A6h9jQQ&quot;&gt;great talk&lt;/a&gt;. &lt;/span&gt;. Unlike other large-scale data stores that forego implementing transactions in order to simplify scaling, FoundationDB was designed with strictly serializable&lt;label for=&quot;serializability&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;serializability&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Strict serializability means that transactions can be given a definite order. Achieving strict serializability is easy on a single node database, but is difficult to scale to an enormous distributed database (part of why the paper is so interesting). For background on the topic, I would recommend &lt;a href=&quot;http://www.bailis.org/blog/linearizability-versus-serializability/&quot;&gt;Peter Bailis’s blog&lt;/a&gt;. &lt;/span&gt; transactions from the ground up.&lt;/p&gt;
+
+&lt;p&gt;In the process of building the system, the team also wrote a testing framework for simulating faults in the network, disk, and other dependencies. This framework became powerful enough that it actually found bugs in software that FoundationDB relied on (like Zookeeper)!&lt;/p&gt;
+
+&lt;h2 id=&quot;what-are-the-papers-contributions&quot;&gt;What are the paper’s contributions?&lt;/h2&gt;
+
+&lt;p&gt;The paper boils down to two major contributions.&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;The FoundationDB system itself (including its feature set and overall architecture)&lt;/li&gt;
+  &lt;li&gt;The framework used to model and test the system&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;On its own, the FoundationDB system is a significant contribution. Its design contrasts with other large-scale storage systems aiming to service billions of users, store petabytes/exabytes of data, and respond to millions of requests per second - FoundationDB supports transactions by default. NoSQL (a common architecture used in large scale storage systems), normally do not include transactions by default&lt;label for=&quot;NoSQL&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;NoSQL&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;The paper does note that many NoSQL systems (like Cassandra, MongoDB, and CouchDB) did not have transactions until recently. &lt;/span&gt;, instead accepting writes that eventually propagate to the entire system (a.k.a. eventual consistency). In the eyes of the authors, systems that rely on eventual consistency force developers to think deeply about how their applications handle concurrent writes (given that with eventual consistency, readers and writers may not see updates to the database immediately).&lt;/p&gt;
+
+&lt;p&gt;The framework used to test the FoundationDB system is also novel. Code related to running the system can be stubbed out (more on stubbing out components in the &lt;em&gt;What is unique about FoundationDB’s testing framework section?&lt;/em&gt;), allowing for engineers to control predominantly all sources of non-deterministic behavior. Being able to artificially induce many different types of failures means that an enormous amount of edge cases can be simulated. More edge cases simulated means more possible issues with those edge cases are found before being released.&lt;/p&gt;
+
+&lt;h2 id=&quot;architecture-of-foundationdb&quot;&gt;Architecture of FoundationDB&lt;/h2&gt;
+&lt;p&gt;To understand how FoundationDB works, the author’s invoke the design principle of “divide-and-conquer” - different components of the FoundationDB architecture are responsible for specific functionality and each function can be scaled separately. The impact of this design choice is that capacity can be gradually added to the components of the system that serve reads or writes, depending on changing usage patterns.&lt;/p&gt;
+
+&lt;p&gt;The divide-and-conquer principle is put into practice by splitting FoundationDB into two planes: the &lt;em&gt;Control Plane&lt;/em&gt; and the &lt;em&gt;Data Plane&lt;/em&gt;.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/foundationdb/arch.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;h2 id=&quot;control-plane&quot;&gt;Control Plane&lt;/h2&gt;
+
+&lt;p&gt;The &lt;em&gt;Control Plane&lt;/em&gt; maintains critical metadata (like system configuration) and performs five independent functions: &lt;em&gt;Coordinators&lt;/em&gt;, &lt;em&gt;Cluster Controller&lt;/em&gt;, &lt;em&gt;Data Distributor&lt;/em&gt;, and &lt;em&gt;Rate Keeper&lt;/em&gt;.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/foundationdb/controlplane.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;The &lt;em&gt;Coordinators&lt;/em&gt; store metadata about different components of the system so that a FoundationDB deployment can recover in the event of failures. As an example, one would run &lt;em&gt;Coordinators&lt;/em&gt; across many different failure domains (for example, running in many regions or datacenters)&lt;label for=&quot;quorom&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;quorom&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;The paper notes that “As long as a quorum (i.e., majority) of Coordinators are live, this metadata can be recovered.” &lt;/span&gt;. The &lt;em&gt;Coordinators&lt;/em&gt; are part of an Active Disk Paxos&lt;label for=&quot;disk paxos&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;disk paxos&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;&lt;a href=&quot;https://groups.csail.mit.edu/tds/papers/Chockler/podc-02.pdf&quot;&gt;Active Disk Paxos&lt;/a&gt; is an extension of Disk Paxos, and Disk Paxos is an extension of the basic Paxos algorithm. Disk Paxos is similar to the normal Paxos algorithm, except it can have multiple disks per processor, and a disk can be accessed by many processors. As an example, the &lt;em&gt;Coordinators&lt;/em&gt; could use defined sections of a shared disk, rather than independent disks. Active Disk Paxos is different than Disk Paxos in that it can scale to infinite clients, while the original Disk Paxos implementation can not. The original paper on Disk Paxos is &lt;a href=&quot;https://lamport.azurewebsites.net/pubs/disk-paxos-disc.pdf&quot;&gt;here&lt;/a&gt; and there is also an interesting description about it on &lt;a href=&quot;https://www.microsoft.com/en-us/research/publication/disk-paxos/&quot;&gt;Microsoft Research&lt;/a&gt;. Apparently a programmatic proof of the algorithm was developed and it found errors in the algorithm, but Lamport chose not to correct the original paper - with the note that “Anyone who writes a rigorous mechanically-checked proof will find them.” &lt;/span&gt; group, and elect a single &lt;em&gt;Cluster Controller&lt;/em&gt;. If the &lt;em&gt;Cluster Controller&lt;/em&gt; fails or becomes unresponsive, a new &lt;em&gt;Cluster Controller&lt;/em&gt; will be elected.&lt;/p&gt;
+
+&lt;p&gt;The &lt;em&gt;Cluster Controller&lt;/em&gt; has several key roles - it monitors all servers in the cluster, in addition to “recruiting” (a.k.a. starting) three key external processes. These three processes are in turn responsible for monitoring specific systems in FoundationDB. Two of the processes run in the &lt;em&gt;Control Plane&lt;/em&gt; - the &lt;em&gt;Data Distributor&lt;/em&gt; ensures optimal functioning of processes in the &lt;em&gt;Data Plane&lt;/em&gt;’s &lt;em&gt;Storage System&lt;/em&gt;, and the &lt;em&gt;Rate Keeper&lt;/em&gt; ensures that the cluster as a whole isn’t overloaded&lt;label for=&quot;ratekeeper&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;ratekeeper&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Although how it ensures this is opaque and not covered in the paper &lt;/span&gt;. The third process run by the &lt;em&gt;Cluster Controller&lt;/em&gt; is called the &lt;em&gt;Sequencer&lt;/em&gt;, and it runs in the &lt;em&gt;Data Plane&lt;/em&gt;. To understand the function of the &lt;em&gt;Data Distributor&lt;/em&gt; and the &lt;em&gt;Sequencer&lt;/em&gt;, let’s move onto the &lt;em&gt;Data Plane&lt;/em&gt;.&lt;/p&gt;
+
+&lt;h2 id=&quot;data-plane&quot;&gt;Data Plane&lt;/h2&gt;
+
+&lt;p&gt;In contrast to the Control Plane’s single subsystem, the &lt;em&gt;Data Plane&lt;/em&gt; contains three: the &lt;em&gt;Transaction System&lt;/em&gt;, the &lt;em&gt;Log System&lt;/em&gt;, and the &lt;em&gt;Storage System&lt;/em&gt;. We will first talk about the systems at a high level, then dive into how they work individually.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/foundationdb/dataplane.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;The &lt;em&gt;Transaction System&lt;/em&gt; communicates with clients and is responsible for in-memory transaction processing in the event of a write transaction - in the event of a transaction commit, components in the &lt;em&gt;Transaction System&lt;/em&gt; call into the &lt;em&gt;Log System&lt;/em&gt; to persist mutations associated with the transaction.&lt;/p&gt;
+
+&lt;p&gt;The &lt;em&gt;Log System&lt;/em&gt; stores persistent record of a transaction (through a Write Ahead Log), and communicates with the &lt;em&gt;Storage System&lt;/em&gt; in order to replicate the Write Ahead Log.&lt;/p&gt;
+
+&lt;p&gt;The &lt;em&gt;Storage System&lt;/em&gt; receives mutations from the &lt;em&gt;Log System&lt;/em&gt; and applies the mutations to its storage. Clients also communicate directly with the &lt;em&gt;Storage System&lt;/em&gt; when performing a read request.&lt;/p&gt;
+
+&lt;p&gt;Now that we understand the different systems in the &lt;em&gt;Data Plane&lt;/em&gt; at a high level, let’s dive into the specifics of how each works.&lt;/p&gt;
+
+&lt;h3 id=&quot;transaction-system&quot;&gt;Transaction System&lt;/h3&gt;
+
+&lt;p&gt;The primary functions of the &lt;em&gt;Transaction System&lt;/em&gt; are to act as a router for read requests and decide whether to commit write transactions. It accomplishes these goals by using three stateless components: a &lt;em&gt;Sequencer&lt;/em&gt;, &lt;em&gt;Proxies&lt;/em&gt;, and &lt;em&gt;Resolvers&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;As mentioned in the &lt;em&gt;Control Plane&lt;/em&gt; section, the &lt;em&gt;Sequencer&lt;/em&gt; is recruited and monitored by the &lt;em&gt;Cluster Controller&lt;/em&gt;. Once the process is running, it starts the other processes in the &lt;em&gt;Transaction System&lt;/em&gt;. The &lt;em&gt;Sequencer&lt;/em&gt; hands out information to the &lt;em&gt;Proxies&lt;/em&gt; when the latter receive client requests&lt;label for=&quot;sequencestate&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;sequencestate&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;We will delve into what state the &lt;em&gt;Sequencer&lt;/em&gt; controls in the &lt;em&gt;How does FoundationDB respond to requests?&lt;/em&gt; section. &lt;/span&gt;.&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;Proxies&lt;/em&gt; respond to client read and write requests. In the event of a read request for a set of keys from a client, the &lt;em&gt;Proxies&lt;/em&gt; will respond with locations of the servers storing the requested information and a version that the client can use to request the data. In the event of a write request, the &lt;em&gt;Proxies&lt;/em&gt; coordinate with the &lt;em&gt;Sequencer&lt;/em&gt; and the third component in the &lt;em&gt;Transaction System&lt;/em&gt;, the &lt;em&gt;Resolvers&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;&lt;em&gt;Resolvers&lt;/em&gt; check whether a client transaction involving writes conflicts with other writes. Each &lt;em&gt;Resolver&lt;/em&gt; is only responsible for preventing transaction conflicts on a subset of the keys in the key-value store.&lt;/p&gt;
+
+&lt;h3 id=&quot;log-system&quot;&gt;Log System&lt;/h3&gt;
+
+&lt;p&gt;The primary goal of the &lt;em&gt;Log System&lt;/em&gt; is to ensure data about committed transactions is replicated once the &lt;em&gt;Transaction System&lt;/em&gt; decides to commit. To perform this function, the &lt;em&gt;Log System&lt;/em&gt; uses many instances of a single server type: the &lt;em&gt;Log Server&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;A &lt;em&gt;Log Server&lt;/em&gt; can be configured to replicate mutations from a single transaction to many copies of the same shard (where a shard is a specific subset of the key-value store’s data and is stored in the &lt;em&gt;Storage System&lt;/em&gt;). To replicate a mutation, &lt;em&gt;Log Servers&lt;/em&gt; communicate with servers in the &lt;em&gt;Storage System&lt;/em&gt;.&lt;/p&gt;
+
+&lt;h3 id=&quot;storage-system&quot;&gt;Storage System&lt;/h3&gt;
+
+&lt;p&gt;Like the &lt;em&gt;Log System&lt;/em&gt;, the &lt;em&gt;Storage System&lt;/em&gt; also has a single server type: the &lt;em&gt;Storage Server&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;Each &lt;em&gt;Storage Server&lt;/em&gt; can store many different shards of the key-value store’s data (normally multiple copies of the same exact shard are not stored on a single server), and each shard corresponds to a contiguous key range&lt;label for=&quot;keyrange&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;keyrange&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;The paper mentions that this results in functionality that is “like a distributed B-tree”. &lt;/span&gt;. The data on each &lt;em&gt;StorageServer&lt;/em&gt; is stored in a souped-up version of SQLite, but there is an in-progress migration to RocksDB.&lt;/p&gt;
+
+&lt;h2 id=&quot;how-does-foundationdb-respond-to-requests&quot;&gt;How does FoundationDB respond to requests?&lt;/h2&gt;
+
+&lt;p&gt;Now that we understand the architecture of FoundationDB, we will dig into how client transactions work. There are three primary types of transactions in FoundationDB: &lt;em&gt;read-write transactions&lt;/em&gt; (reads and writes associated with a single transaction), &lt;em&gt;read-only transactions&lt;/em&gt;, and &lt;em&gt;snapshot reads&lt;/em&gt;. &lt;em&gt;Read-write transactions&lt;/em&gt; are by far the most complicated and are where we will devote most of our discussion.&lt;/p&gt;
+
+&lt;h3 id=&quot;read-write-transactions&quot;&gt;Read-write transactions&lt;/h3&gt;
+
+&lt;p&gt;If a client executes logic that writes data based on what it reads, it should likely use a &lt;em&gt;read-write transaction&lt;/em&gt;. Reasons for using this style of transaction could be: ensuring that writes fail if the previously-read data is no longer correct, or to require an all-or-nothing approach to applying multiple writes (all writes need to commit or none of them commit).&lt;/p&gt;
+
+&lt;p&gt;In order to perform a &lt;em&gt;read-write transaction&lt;/em&gt;, a client first requests a &lt;em&gt;read version&lt;/em&gt; from a &lt;em&gt;Proxy&lt;/em&gt;. The &lt;em&gt;Proxy&lt;/em&gt; then turns around and requests two pieces of information from the &lt;em&gt;Sequencer&lt;/em&gt;: a  &lt;em&gt;read version&lt;/em&gt; and a &lt;em&gt;commit version&lt;/em&gt; (remember that both the &lt;em&gt;Proxy&lt;/em&gt; and &lt;em&gt;Sequencer&lt;/em&gt; are in the &lt;em&gt;Transaction System&lt;/em&gt;) &lt;label for=&quot;versions&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;versions&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Before moving on, it is important to note an important property of the &lt;em&gt;commit version&lt;/em&gt;: the &lt;em&gt;commit version&lt;/em&gt; must be “greater than any existing read versions or commit versions”. We will come back to this property when we consider the write-path. &lt;/span&gt;. The &lt;em&gt;Proxy&lt;/em&gt; internally associates a transaction’s &lt;em&gt;read version&lt;/em&gt; with the &lt;em&gt;commit version&lt;/em&gt; before returning the &lt;em&gt;read version&lt;/em&gt; to the client. The client can then use the &lt;em&gt;read version&lt;/em&gt; to fetch data at a specific version directly from the &lt;em&gt;Storage Server&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;Once the &lt;em&gt;Proxy&lt;/em&gt; returns the &lt;em&gt;read version&lt;/em&gt; to the client, the client will read keys from the &lt;em&gt;Storage Servers&lt;/em&gt; and buffer writes until it wants to commit. When the client finally sends a commit request to the &lt;em&gt;Proxy&lt;/em&gt;, it includes the set of all of the key ranges that the client read (while the client may have only read a specific key, that key is stored in a key range on a shard, and that shard could have been impacted by a different transaction) and the set of all key ranges that the client intends to write to.&lt;/p&gt;
+
+&lt;p&gt;Once the &lt;em&gt;Proxy&lt;/em&gt; receives these two sets of impacted key ranges, it then needs to determine whether the transaction can be committed or not. This is accomplished by using &lt;em&gt;Resolvers&lt;/em&gt;, which maintain state about when the key ranges they are responsible for were last impacted by a committed transaction. Because the &lt;em&gt;Resolvers&lt;/em&gt; are each responsible for a subset of key ranges (remembering the description above), the &lt;em&gt;Proxy&lt;/em&gt; forwards the sets to the appropriate &lt;em&gt;Resolver&lt;/em&gt;, which evaluates whether the transaction can be committed.&lt;/p&gt;
+
+&lt;p&gt;When a &lt;em&gt;Resolver&lt;/em&gt; receives these requests from the &lt;em&gt;Proxy&lt;/em&gt; it uses a relatively straightforward algorithm to determine whether the transaction can be committed - for every key range that was read by the transaction, was the key range committed to by a transaction with a greater commit version. If the last commit for a key range is greater than the current read version, committing would break strict serializability, which mandates that “transactions must observe the results of all previous committed transactions”. In this situation, the client should retry their transaction. On the other hand, if it is safe to commit, the &lt;em&gt;Resolver&lt;/em&gt; does so, meanwhile updating its “last committed to” field for all ranges that the transaction wrote to.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/foundationdb/mutation.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;The flow when a commit occurs&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;Once a commit has been accepted, the &lt;em&gt;Proxy&lt;/em&gt; broadcasts a message to all &lt;em&gt;LogServers&lt;/em&gt; - the message contains the key ranges that were impacted by the commit. When a &lt;em&gt;LogServer&lt;/em&gt; receives this message, it stores it on disk (to ensure recovery in case of system failure) and determines whether it manages replicas of any of the impacted key ranges. Meanwhile, &lt;em&gt;Storage Servers&lt;/em&gt; are continuously polling &lt;em&gt;Log Servers&lt;/em&gt; for updates, and will pull (then persist) the update themselves.&lt;/p&gt;
+
+&lt;h3 id=&quot;read-only-transactions-and-snapshot-reads&quot;&gt;Read-only transactions and snapshot reads&lt;/h3&gt;
+
+&lt;p&gt;Read-only transactions and snapshot reads are relatively straightforward in FoundationDB - when a client initiates a read request, the &lt;em&gt;Proxy&lt;/em&gt; returns a &lt;em&gt;read version&lt;/em&gt; (through the same process of interacting with the &lt;em&gt;Sequencer&lt;/em&gt;, as mentioned above). The client the communicates directly with the &lt;em&gt;Storage Servers&lt;/em&gt; associated with the key ranges that the client wants to read. The simplicity of this approach is great because the load on the database is dominated by reads.&lt;/p&gt;
+
+&lt;h2 id=&quot;what-is-unique-about-foundationdbs-testing-framework&quot;&gt;What is unique about FoundationDB’s testing framework?&lt;/h2&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/foundationdb/simulation.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;Now that we have walked through the many components involved in FoundationDB transactions, it may be easier to see how many places in the system that a failure could happen. To root out potential issues caused by failures, the team developed a simulation testing framework where “all sources of nondeterminism and communication are abstracted, including network, disk, time, and pseudo random number generator.” In production, these stubs are just sent to the backing system calls - pretty neat! The testing framework also reminded me of fuzzing software to trigger rarely-hit edge cases and see what happens.&lt;/p&gt;
+
+&lt;p&gt;When running test workloads, failures at the “machine, rack, and data-center” are simulated. Modeled hardware will be “broken”, then returned to a state where the system should be able to recover (and if a recovery doesn’t happen, the developers investigate why). The simulation code can also arbitrarily break operations by returning error codes, adding delay, or modifying configuration variables beyond a range of what would normally be set.&lt;/p&gt;
+
+&lt;p&gt;Part of what I found most interesting about the testing framework was the idea that the simulations can be “bursted” around releases - because many simulations can be run in parallel, the developers will just run more of them and try to find bugs.&lt;/p&gt;
+
+&lt;h2 id=&quot;conclusion&quot;&gt;Conclusion&lt;/h2&gt;
+
+&lt;p&gt;Given that this paper review is already fairly long, I decided not to cover other interesting aspects of the system (for example FoundationDB’s approach to system recovery, replication, or failovers).&lt;/p&gt;
+
+&lt;p&gt;The takeways from what this review does cover are:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;FoundationDB separates different parts of the system so that they can be scaled independently&lt;/li&gt;
+  &lt;li&gt;Creating separate subsystems that can scale independently is difficult, but facilitated by a novel simulation testing framework that allows the developer team to confidently rework the system (not to mention making users of the system confident that bugs will be caught before they reach production).&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Until next week!&lt;/p&gt;
+</description>
+                            <pubDate>Sat, 12 Jun 2021 00:00:00 -0700</pubDate>
+                            <link>/2021/06/12/foundationdb-a-distributed-unbundled-transactional-key-value-store.html</link>
+                            <guid isPermaLink="true">/2021/06/12/foundationdb-a-distributed-unbundled-transactional-key-value-store.html</guid>
+                        </item>
+                    
+                
+                    
+                        <item>
+                            <title>Scaling Memcache at Facebook</title>
+                            <description>&lt;p&gt;&lt;a href=&quot;https://www.usenix.org/system/files/conference/nsdi13/nsdi13-final170_update.pdf&quot;&gt;Scaling Memcache at Facebook&lt;/a&gt; Nishtala, et al. NSDI 2013&lt;/p&gt;
+
+&lt;p&gt;After reading about &lt;a href=&quot;https://www.micahlerner.com/2021/03/28/noria-dynamic.html&quot;&gt;Noria&lt;/a&gt;, I decided to read Facebook’s implementation of a caching system at scale. This paper was enjoyable to read for a few reasons - it not only points out the tradeoffs made in designing such a system, but also the learnings associated with operating it.&lt;/p&gt;
+
+&lt;h2 id=&quot;what-are-the-papers-contributions&quot;&gt;What are the paper’s contributions?&lt;/h2&gt;
+
+&lt;p&gt;The paper discusses how Facebook built a distributed key value &lt;label for=&quot;dkv&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;dkv&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;A distributed key value store often allows for gettting, setting, and deleting values from a datastore with multiple copies (although specifics of how many and when data is copied are use-case specific, as the paper talks about!). &lt;/span&gt; store on top of &lt;a href=&quot;https://www.memcached.org/&quot;&gt;memcached&lt;/a&gt;&lt;label for=&quot;perl&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;perl&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;In the process of writing this, I learned that memcached was originally written in Perl! &lt;/span&gt; in order to cache a wide variety of data, including database query results and data for backend services.&lt;/p&gt;
+
+&lt;p&gt;On its own, memcached is a basic key value store, yet Facebook viewed memcached’s simplicity as a positive rather than a negative. The system’s simplicity meant that Facebook was able to easily tailor the application to its use case of serving millions of user requests every second, as well as adding more advanced functionality as needed.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/fbmc/memcache.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;Memcache usage&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;Of this paper’s contributions, the “how?” of scaling such a system is significant - their distributed key-value store needed to be scaled from a single cluster (in one data center), to many clusters in a single region, and finally to many regions with many clusters each. The paper also includes rationales for design decisions, along with acknowledgements of potential edge cases (and often times reasoning for why an unresolved edge case does not have an impact on the running system).&lt;/p&gt;
+
+&lt;h2 id=&quot;so-how-did-facebook-approach-scaling-memcache&quot;&gt;So, how did Facebook approach scaling memcache?&lt;/h2&gt;
+
+&lt;p&gt;In order to understand how Facebook scaled memcache, it is helpful to frame the scaling in three areas: within a cluster, within a region (a region may have many clusters), and between many regions (where each region has many clusters).&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/fbmc/architecture.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;h3 id=&quot;scaling-within-a-cluster&quot;&gt;Scaling within a cluster&lt;/h3&gt;
+
+&lt;p&gt;The primary concern for scaling memcache within a cluster was reducing &lt;em&gt;latency&lt;/em&gt; and &lt;em&gt;load&lt;/em&gt;&lt;label for=&quot;landl&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;landl&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Latency meaning response time to user request and load meaning the computational load placed on the backing datastore &lt;/span&gt;. Additionally, there is some discussion of increasing the reliability of the system through automatic failure recovery.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Reducing Latency&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;To reduce &lt;em&gt;latency&lt;/em&gt;, Facebook engineers implemented three main features: request parallelization, the &lt;em&gt;mcrouter&lt;/em&gt;, and &lt;em&gt;congestion control&lt;/em&gt; measures.&lt;/p&gt;
+
+&lt;p&gt;First, they noticed that memcache requests were being performed serially, so they modified their web server code to increase request parallelization. This improvement meant that unrelated data could be fetched in parallel.&lt;label for=&quot;DAG&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;DAG&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;The paper does not go into great depth into how the client determines which memcache requests can be parallelized, only adding that a DAG of request dependencies is used. &lt;/span&gt;.&lt;/p&gt;
+
+&lt;p&gt;An additional measure to reduce latency was the addition of a proxy (&lt;em&gt;mcrouter&lt;/em&gt;) in between the web servers and the actual backing memcache servers in order to distribute load and route requests. This &lt;em&gt;mcrouter&lt;/em&gt; exposes the same interface as the memcache server and maintains TCP connections with threads on the web server. The web server sends memcache requests that mutate state (&lt;em&gt;set&lt;/em&gt;, &lt;em&gt;delete&lt;/em&gt;) to the mcrouter over TCP (given the built-in reliability of TCP), but sends all other memcache requests (like &lt;em&gt;get&lt;/em&gt; requests) directly to the backing memcache servers over UDP. This decision to use TCP versus UDP is based on the fact that maintaining TCP connections from all web server threads to all memcached servers (of which there are many) would incur significant cost. &lt;label for=&quot;networking&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;networking&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;For a quick refresher on this, Computer Networking: A Top-Down Approach is very good. &lt;/span&gt;&lt;/p&gt;
+
+&lt;p&gt;To limit congestion on the network (more congestion = more latency), memcache clients are prohibited from issuing unbounded requests. Instead, a sliding window was added to memcache clients that prohibits more than &lt;em&gt;n&lt;/em&gt; requests to be in-flight at once (where &lt;em&gt;n&lt;/em&gt; is a configurable setting). If the in-flight request limit is reached by a memcache client, they are put into a request queue. Based on the data in the paper, it turned out that this idea is great for reducing contention, and didn’t impact clients that are operating normally. This insight is a great instance of using behavior in production to guide implementation!&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Reducing Load&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;To reduce &lt;em&gt;load&lt;/em&gt; on the backing data store, three features were added: &lt;em&gt;leases&lt;/em&gt;, &lt;em&gt;memcache pools&lt;/em&gt;, and &lt;em&gt;replication within pools&lt;/em&gt;.&lt;/p&gt;
+
+&lt;p&gt;Leases were implemented to address two main problems, &lt;em&gt;stale sets&lt;/em&gt; and &lt;em&gt;thundering herds&lt;/em&gt;&lt;label for=&quot;stalesets&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;stalesets&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;A stale set is when a client sets a value with an old value, and a thundering herd is when a specific key undergoes heavy read or write volume. &lt;/span&gt;, and are values given out to clients for a specific key. To solve stale sets, the backend server checks what is the most recent lease given out for a specific key, and will block writes from an old copy of the key. To solve thundering herds (for example, many clients trying to fetch data for the same key, but the key is not in the cache), leases are given out at a constant rate. If a client requests data for a key, but a lease for the key has already been given out, the lease request will fail and the client will need to retry. Meanwhile, the owner of the lease will cause the key to be filled from cache, and the client will succeed on retry. Crisis avoided.&lt;/p&gt;
+
+&lt;p&gt;Another optimization occurred when Facebook realized that different datasets stored in memcached have different churn rates - for example, some keys in the cache change frequently, while others remain the same for the long time. If a long-lived key is in a cache with items that change frequently, based on an LRU caching policy long-lived the key is likely to be evicted. To fix this, keys with different churn rates can be separated (and the infrastructure for the different key sets can be sized appropriately).&lt;/p&gt;
+
+&lt;p&gt;For small datasets (the dataset can fit in one or two memcache servers) that have high request rates, the data is replicated. Replicating the dataset across multiple servers means that the load can be spread out, limiting the chance of a bottleneck at any given server.&lt;/p&gt;
+
+&lt;h4 id=&quot;automatic-failure-recovery&quot;&gt;Automatic failure recovery&lt;/h4&gt;
+
+&lt;p&gt;Facebook has large computing clusters and likely has many memcached servers failing every day because computers break in weird ways. To prevent these failures from cascading, Facebook built a system called &lt;em&gt;Gutter&lt;/em&gt;. &lt;em&gt;Gutter&lt;/em&gt; kicks in if a memcache client doesn’t get a response for a key. In this event, the data is fetched from the database and placed on the &lt;em&gt;Gutter&lt;/em&gt; server, essentially diverting that key away from the main cluster. This approach is explicitly chosen over the alternative of redistributing keys from a failed machine across the remaining healthy machines (which the paper argues is a more dangerous alternative that could overload the healthy servers).&lt;/p&gt;
+
+&lt;h3 id=&quot;scaling-among-clusters-within-a-region&quot;&gt;Scaling among clusters within a region&lt;/h3&gt;
+
+&lt;p&gt;Within a region, the paper highlights that the biggest concern is data-replication between multiple copies of the cache. To solve this problem space, Facebook implemented three features: an invalidation daemon (a.k.a McSqueal) that replicates the cache invalidations across all cache copies in region, a &lt;em&gt;regional pool&lt;/em&gt; of memcache servers that all clusters in a region share for certain types of data, and a mechanism for preparing clusters before they come online.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/fbmc/mcsqueal.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;The invalidation daemon used to replicate cache-invalidations among clusters reads the MySQL commit log, transforming deletes into the impacted MySQL keys that need to be deleted from the cache, and eventually batching the deletes in a message to the &lt;em&gt;mcrouter&lt;/em&gt; that sits in front of the memcache servers. &lt;label for=&quot;mcsqueal&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;mcsqueal&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Personal opinion: using the MySQL commit log as a stream that daemons operate on is a great design pattern (and was likely ahead of its time when the paper came out)! &lt;/span&gt;&lt;/p&gt;
+
+&lt;p&gt;The next section of the paper talks about &lt;em&gt;regional pools&lt;/em&gt;, which are a strategy to maintain single copies of data in order to limit data usage and inter-cluster traffic from replication. Normally datasets with smaller values and lower traffic are placed here, although the paper waves the hands a little bit about a manual heuristic that figures out which keys would be good candidates for regional pools.&lt;/p&gt;
+
+&lt;p&gt;The last topic related to scaling among clusters within a region is the cluster warmup process. A cluster that just started up may have access to the database, but completely empty memcache servers. To limit the cache misses hitting the database, the cold cluster will forward requests to a cluster that already has a satisfactory memcache hit-rate.&lt;/p&gt;
+
+&lt;h3 id=&quot;scaling-among-regions&quot;&gt;Scaling among regions&lt;/h3&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/fbmc/architecture.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;The same architecture image as above, but repeated for reference.&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;Facebook uses many regions around the world to get computers closer to their customers (which in turn results in lower latency) and reduce the risk that abnormal events like a &lt;a href=&quot;https://www.datacenterdynamics.com/en/news/fire-destroys-ovhclouds-sbg2-data-center-strasbourg/&quot;&gt;fire&lt;/a&gt; or power outage bring their whole site down. Making a cache among these many regions is certainly difficult, and the paper discusses how &lt;em&gt;consistency&lt;/em&gt; is their primary concern at this level.&lt;/p&gt;
+
+&lt;p&gt;At the time of the paper’s publication, Facebook relied on MySQL’s replication to keep databases up to date between regions. One region would be the master, while the rest would be the slaves &lt;label for=&quot;terms&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;terms&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;I use the terms master/slave from the literature, rather than choosing them myself. &lt;/span&gt;. Given the huge amount of data that Facebook has, they were willing to settle for eventual consistency (the system will tolerate out of sync data if the slave regions fall behind the master region).&lt;/p&gt;
+
+&lt;p&gt;Tolerating replication lag means that there are a few situations that need to be thought through.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;What happens if a MySQL delete happens in a master region?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;The MySQL commit log is consumed in the master region and produces a cache invalidation &lt;em&gt;only in the master region&lt;/em&gt;. Because cache invalidations are produced from the MySQL commit log (versus cache invalidations and the commit log being replicated separately) the cache invalidation won’t even appear in a non-master region until the replication log is replicated there. Imagine all of the weird situations that could happen if the cache invalidations were replicated separately and a cache invalidation would show up before the database even knew about it (you could try to invalidate something that wasn’t in cache yet).&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;What happens if a stale read happens in a non-master region?&lt;/strong&gt;&lt;/p&gt;
+
+&lt;p&gt;Because the system is eventually consistent, data in the slave regions will be out-of-date at some point. To limit the impact of clients reading out-of-date data, Facebook added a &lt;em&gt;remote marker mechanism&lt;/em&gt;. When a web server wants to update a dataset and ensure that stale data is not read (or at least that there is a lower chance of stale reads), the server sets a marker for the key (where the marker’s value is a region may or not be the master region). Then, the server deletes the value from the region’s cache. Future reads will then be redirected to the region value set in the marker.&lt;/p&gt;
+
+&lt;h3 id=&quot;takeaways&quot;&gt;Takeaways&lt;/h3&gt;
+
+&lt;p&gt;This paper contains an incredible amount of detail on how Facebook scaled their memcache infrastructure, although the paper was published in 2013 and 8 years is a long time. I would be willing to bet that their infrastructure has changed significantly since the paper was originally published.&lt;/p&gt;
+
+&lt;p&gt;Even with the knowledge that the underlying infrastructure has likely changed, this paper provides useful insights into how the engineering org made many tradeoffs in the design based on data from the production system (and with the ultimate goal of a maintaining as simple of a design as possible.&lt;/p&gt;
+
+&lt;p&gt;Since 2013, a number of other companies have built key value stores and published research on their architectures - in the future I hope to read those papers and contrast their approaches with Facebook’s!&lt;/p&gt;
+</description>
+                            <pubDate>Mon, 31 May 2021 00:00:00 -0700</pubDate>
+                            <link>/2021/05/31/scaling-memcache-at-facebook.html</link>
+                            <guid isPermaLink="true">/2021/05/31/scaling-memcache-at-facebook.html</guid>
+                        </item>
+                    
+                
+                    
+                        <item>
+                            <title>Reflecting on 2020</title>
+                            <description>&lt;p&gt;I’m publishing my year in review for 2020 in (almost) June 2021, although it was mostly written (and just in the backburner state) as I spun up in a new role.&lt;/p&gt;
+
+&lt;p&gt;2020 was quite a year. In early 2020 I had taken time off for work and was bug bounty hunting for fun and profit. Taking time off from work meant that I also spent significant time reading the news (moreso than a full-time-employed version of myself would). As a result, I felt like I saw the coronavirus coming to the US in slow motion, then all at once.&lt;/p&gt;
+
+&lt;p&gt;Post March 2020, life changed significantly in many ways. My partner came home from law school for Spring Break, and never went back &lt;label for=&quot;law&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;law&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;She graduated! &lt;/span&gt;. Great things happened - we moved in together and got engaged in early 2021!&lt;/p&gt;
+
+&lt;p&gt;Workwise, I started a new role at Mapbox in the first few weeks of the Bay Area’s stay at home orders. It could have been extremely stressful, but I think Mapbox’s culture was uniquely suited to enabling the onboarding to happen as smoothly as it did. Over a year later in early 2021 (while I was having a great time working at Mapbox), a Google recruiter reached out about a dream job on the SRE team. That call led to interviews and an offer - now I am amazingly on the Google Geo SRE team! &lt;label for=&quot;What is an SRE?&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;What is an SRE?&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;I will leave it to &lt;a href=&quot;https://sre.google/sre-book/table-of-contents/&quot;&gt;the SRE book&lt;/a&gt; to describe what my role entails: “SRE is what you get when you treat operations as if it’s a software problem. Our mission is to protect, provide for, and progress the software and systems behind all of Google’s public services — Google Search, Ads, Gmail, Android, YouTube, and App Engine, to name just a few — with an ever-watchful eye on their availability, latency, performance, and capacity.” &lt;/span&gt;&lt;/p&gt;
+
+&lt;p&gt;In other words, much happened (which brings me back to the traditional section of a year-in-review).&lt;/p&gt;
+
+&lt;h3 id=&quot;what-didnt-go-well&quot;&gt;What didn’t go well&lt;/h3&gt;
+
+&lt;p&gt;Much of what I envisioned with respect to goals in my &lt;a href=&quot;/yearly/review/2020/03/01/looking-ahead-in-2020.html&quot;&gt;last yearly review&lt;/a&gt; had to be tossed out the window.&lt;/p&gt;
+
+&lt;p&gt;I’m not too hard on myself for not achieving every goal I set for myself in 2020. Goal setting is an important (and useful) exercise in and of itself, and I am of the school of thought that achieving 100% of one’s goals means that the goals were not lofty enough!&lt;/p&gt;
+
+&lt;p&gt;That said, I am resolving to make the learning goals I set in the future more focused and measurable than they have been in the past. &lt;label for=&quot;goals&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;goals&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Other life goals not featured here. :) &lt;/span&gt;&lt;/p&gt;
+
+&lt;h3 id=&quot;what-went-well&quot;&gt;What went well&lt;/h3&gt;
+
+&lt;p&gt;I did achieve certain learning goals, even in the middle of a global pandemic.&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;strong&gt;Learning Mandarin:&lt;/strong&gt; I kept to my goal of learning Mandarin every day! While I have stayed with daily usage of Duolingo, I dropped other apps I was using to learn the language. My plan to attend a Mandarin course obviously didn’t happen (how “early March 2020” of me to make that goal), I started working with a teacher on Italki - it is an amazing site for language learners, where one can connect with professional teachers who are running their own teaching businesses. Having a teacher was an amazing inflection point for my language learning. I currently meet with him for about three hours every week.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Writing&lt;/strong&gt;: I wrote significantly more (around +50%) in 2020 than I did in 2019, and I’m calling that a win. Some of my writing even made it to the top of Hacker News, which was fun to see. I want to keep writing about what I’m passionate about, and work on trying to find my audience.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Learning about systems&lt;/strong&gt;: In the fall of 2020, I started a Master’s degree at Georgia Tech. I initially was planning on focusing in ML, but I started out taking Systems courses. This led to a pivot when I realized that I actually prefer Systems - the skillset is enjoyable to me, and will likely always be useful (thus building a wider foundation in it is more valuable). This is in contrast to ML knowledge, which is subject to change in the very near future. &lt;label for=&quot;Max&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;Max&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Thank you to my friend Max for your thoughts! &lt;/span&gt;
+&lt;label for=&quot;&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;&lt;a href=&quot;https://www.shreya-shankar.com/systems/&quot;&gt;Related article&lt;/a&gt; on the usefulness of studying systems &lt;/span&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;looking-ahead-to-the-rest-of-2021&quot;&gt;Looking ahead to (the rest of) 2021&lt;/h3&gt;
+
+&lt;p&gt;In a previous edition of my yearly reflections, I wrote that I thought learning shouldn’t be bound by goals because “learning isn’t work”. I have since changed my tune on this. In fact, I think that in this distracted world, having goals for learning that you have written up on the wall can be helpful for focusing oneself (in particular, myself)&lt;/p&gt;
+
+&lt;p&gt;On that note, I have made a few goals for myself:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;strong&gt;Learning Mandarin&lt;/strong&gt;. Mandarin is such an interesting language - each character has a story, and it is fun to see how words I already known can be combined together to form new words (旧字新字).
+    &lt;ul&gt;
+      &lt;li&gt;Keep learning with the goal of passing the HSK4 test by March of 2022. HSK4 is a milestone that students who have studied Chinese for two academic years study for. &lt;label for=&quot;HSK4&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;HSK4&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;I would be at about 1.5 years by then, but it never hurts to be ahead of schedule &lt;/span&gt;&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Writing and the blog&lt;/strong&gt;
+    &lt;ul&gt;
+      &lt;li&gt;Build an audience of 1000 subscribers for my blog. Why 1000? 100 seems too achievable, and 1000 subscribers would be pretty serious (considering that I only got 20 subscribers from being on the front page of Hacker News)! Building an audience for the blog also means that I am writing about topics that others find interesting, and doing so in a fashion that is good enough to be warrant showing up in someone’s inbox.&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Systems&lt;/strong&gt;
+    &lt;ul&gt;
+      &lt;li&gt;Read at least one systems paper a week from distributed systems and write an &lt;a href=&quot;https://notes.andymatuschak.org/Evergreen_notes&quot;&gt;evergreen note&lt;/a&gt; about it.&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Computer Security&lt;/strong&gt;
+    &lt;ul&gt;
+      &lt;li&gt;Find one or more security vulnerabilities in an Ethereum contract. I’ve been interested in Ethereum for a while, but trying to find a security vulnerability in a contract will require deeper understanding of both the platform and the newer innovations on it (like the various DeFi protocols).&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+</description>
+                            <pubDate>Sun, 23 May 2021 00:00:00 -0700</pubDate>
+                            <link>/2021/05/23/reflecting-on-2020.html</link>
+                            <guid isPermaLink="true">/2021/05/23/reflecting-on-2020.html</guid>
+                        </item>
+                    
+                
+                    
+                        <item>
+                            <title>Noria: dynamic, partially-stateful data-flow for high-performance web applications</title>
+                            <description>&lt;p class=&quot;discussion&quot;&gt;Discussion on &lt;a href=&quot;https://news.ycombinator.com/item?id=26642082&quot;&gt; Hacker News&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;https://pdos.csail.mit.edu/papers/noria:osdi18.pdf&quot;&gt;Noria: dynamic, partially-stateful data-flow for high-performance web applications&lt;/a&gt; Gjengset, Schwarzkopf, et al. OSDI 2018&lt;/p&gt;
+
+&lt;p&gt;I started reading this paper after finding the work of &lt;a href=&quot;https://thesquareplanet.com/&quot;&gt;Jon Gjengset&lt;/a&gt; - he has great streams about Rust (in particular, I have been enjoying &lt;a href=&quot;https://www.youtube.com/playlist?list=PLqbS7AVVErFiWDOAVrPt7aYmnuuOLYvOa&quot;&gt;Crust of Rust&lt;/a&gt;, where he goes over intermediate Rust topics).&lt;/p&gt;
+
+&lt;h2 id=&quot;what-is-noria&quot;&gt;What is Noria?&lt;/h2&gt;
+&lt;p&gt;The Noria paper outlines a system that could replace a traditional two-tier architecture used in web applications to serve high read request volume.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/noria/two-tier.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;Classic two tier architecture&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;This two-tier architecture uses a backing database and a cache (like Memcached, Redis, etc.) to limit the number of requests that hit the backing database. Putting a cache in front of the database to serve read requests raises several important questions:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;How is the cache invalidated when a write is made to the backing datastore? Presumably, the cache should be invalidated when a write happens, but how does one make sure that cache invalidations don’t trigger all at once (an event that could overload your infrastructure if all reads suddenly hit the backing database, causing it to fall over).&lt;/li&gt;
+  &lt;li&gt;How is the cache set up to handle changes in user patterns? For example, say that the cache only has a subset of popular records, but traffic suddenly shifts to a different set of records (imagine that a different set of videos go viral).&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Another challenge with a traditional two-tier architecuture is being able to handle aggregations well - for example, say that you wanted to maintain the top-k posts on a site, or the min/max of a set of values. These types of aggregations are supported by current stream processing systems, with a caveat - the stream processing systems often perform aggregations over a window of time to limit the data that needs to be retained. 
+&lt;label for=&quot;window&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;window&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;Once a record goes out of the window used by the aggregation, the record is dropped, limiting the number of records that need to be kept around. &lt;/span&gt;&lt;/p&gt;
+
+&lt;h2 id=&quot;data-flow&quot;&gt;Data Flow&lt;/h2&gt;
+
+&lt;p&gt;The Noria paper proposes a new database (and includes an &lt;a href=&quot;https://github.com/mit-pdos/noria&quot;&gt;implementation&lt;/a&gt;), that aims to support “read-heavy applications that tolerate eventual consistency”.&lt;/p&gt;
+
+&lt;p&gt;In order to achieve the goal of getting rid of an external cache, Noria effectively caches results for common queries &lt;em&gt;inside&lt;/em&gt; the database. &lt;label for=&quot;cache in db&quot; class=&quot;margin-toggle&quot;&gt;⊕&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;cache in db&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;marginnote&quot;&gt;&lt;img class=&quot;fullwidth&quot; src=&quot;/assets/noria/cacheindb.gif&quot; /&gt;&lt;br /&gt;&lt;/span&gt;&lt;/p&gt;
+
+&lt;p&gt;To supporting caching inside the database, two structures are used:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;Base tables (a persistent store of the database state)&lt;/li&gt;
+  &lt;li&gt;Derived views (“the data that an application might choose to cache”)&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Derived views (similar to materialized views in current database implementations) are populated using data from base tables. Operations on the database like writes, updates, and deletes &lt;em&gt;flow&lt;/em&gt; through a graph that contains state, updating the cache - the concept of changes propagating through graph is called &lt;strong&gt;data flow&lt;/strong&gt;&lt;label for=&quot;data flow&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;data flow&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;The paper points to past research on data-flow systems, like &lt;a href=&quot;https://cs.stanford.edu/~matei/courses/2015/6.S897/readings/naiad.pdf&quot;&gt;Naiad: A Timely Dataflow System&lt;/a&gt;. &lt;/span&gt;.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/noria/data-flow.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;Data flow example&lt;/figcaption&gt;&lt;/figure&gt;
+
+&lt;p&gt;The nodes in the data-flow graph are views of the database used by readers, or cached intermediate results used to build those views. The edges can represent relationships between intermediate results - for example, if a derived view relies on two tables, there would be edges between the intermediate results and the output derived view. Interestingly, related derived views (views that use the same underlying tables) can &lt;strong&gt;reuse&lt;/strong&gt; the graph of state (more on reuse of the state in the graph later).&lt;/p&gt;
+
+&lt;p&gt;If a read query occurs, but the data required to answer the query is not cached, Noria can choose to fetch the data using an &lt;strong&gt;upquery&lt;/strong&gt;.&lt;/p&gt;
+
+&lt;p&gt;The idea of representing derived views as a graph of intermediate results comes in handy when new user patterns emerge or new derived tables are added. In this situation, Noria will &lt;em&gt;transition&lt;/em&gt; to a new graph of data-flow:&lt;/p&gt;
+&lt;blockquote&gt;
+  &lt;p&gt;Noria first plans the transition, reusing operators and state of existing expressions where possible (§5.1). It then incrementally applies these changes to the data-flow, taking care to maintain its correctness invariants (§5.2). Once both steps complete, the application can use new tables and queries.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;The paper argues that this transitioning pattern is fundamentally different than existing data-flow systems, which can not perform updates to the graph on the fly (or without a restart).&lt;/p&gt;
+
+&lt;p&gt;To ensure that the size of the data in the derived views does not have unbounded growth, Noria implements &lt;em&gt;partially&lt;/em&gt; stateful data-flow - 
+if the footprint of the derived views grows to be too large, the system evicts data intelligently 
+(a user of the system need to ensure enough resources are provided so that there is not significant churn in the data kept in cache).
+&lt;label for=&quot;materialized views&quot; class=&quot;margin-toggle sidenote-number&quot;&gt;&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;materialized views&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;sidenote&quot;&gt;The paper mentions that partial materialization is not entirely new, but that applying the idea to “data-flow” systems is. &lt;/span&gt;.&lt;/p&gt;
+
+&lt;h3 id=&quot;performance-evaluation&quot;&gt;Performance evaluation&lt;/h3&gt;
+
+&lt;p&gt;The paper includes an evaluation section, where the system is benchmarked against a set of other databases. The benchmark contains a simulation of read traffic to &lt;a href=&quot;https://lobste.rs&quot;&gt;lobste.rs&lt;/a&gt;, and in this comparison Noria does quite well, scaling to many millions of requests before hitting a wall.&lt;/p&gt;
+
+&lt;figure&gt;&lt;img class=&quot;maincolumn-img&quot; src=&quot;/assets/noria/evaluation.png&quot; /&gt;&lt;figcaption class=&quot;maincolumn-figure&quot;&gt;Comparison of Noria to competing systems&lt;/figcaption&gt;&lt;/figure&gt;
+</description>
+                            <pubDate>Sun, 28 Mar 2021 00:00:00 -0700</pubDate>
+                            <link>/2021/03/28/noria-dynamic.html</link>
+                            <guid isPermaLink="true">/2021/03/28/noria-dynamic.html</guid>
+                        </item>
+                    
+                
+                    
+                        <item>
+                            <title>Understanding Raft - Part 2 (Raft leaders, logs, and safety)</title>
+                            <description>&lt;blockquote&gt;
+  &lt;p&gt;This post is a continuation in the series I wrote about Raft, the first part of which is &lt;a href=&quot;2020/05/08/understanding-raft-consensus.html&quot;&gt;here&lt;/a&gt;. This post focuses on what underlies leader election, log replication, and Raft safety. Enjoy!&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;h2 id=&quot;leaders-and-leader-election&quot;&gt;Leaders and leader election&lt;/h2&gt;
+&lt;p&gt;The Raft protocol requires a single node (called the &lt;strong&gt;Leader&lt;/strong&gt;) to direct other nodes on how they should change their respective states of the world. There can only be one leader at a time - Raft maintains a representation of time called a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;term&lt;/code&gt;. This term only changes in special situations, like when a node attempts to become a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt;.
+When a Raft cluster starts, there are no leaders and one needs to be chosen through a process called &lt;strong&gt;Leader Election&lt;/strong&gt; before the cluster can start responding to requests.&lt;/p&gt;
+
+&lt;h3 id=&quot;how-does-the-leader-election-process-work&quot;&gt;How does the leader election process work?&lt;/h3&gt;
+&lt;p&gt;A node starts the leader election process by designating itself to be a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Candidate&lt;/code&gt;, incrementing its term, voting for itself, and requesting the votes of other nodes in the Raft cluster using &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;RequestVote&lt;/code&gt;.&lt;/p&gt;
+
+&lt;p&gt;There are a few ways that a node can exit &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Candidate&lt;/code&gt; state:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;If the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Candidate&lt;/code&gt; node receives a majority of votes within some configurable time period of the election starting, it becomes the leader.&lt;/li&gt;
+  &lt;li&gt;If the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Candidate&lt;/code&gt; node doesn’t receive a majority of votes within some configurable time period of the election starting (and it hasn’t heard from another leader, as in the case below), the node restarts the election (including incrementing its term and and sending out &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;RequestVote&lt;/code&gt; communications again).&lt;/li&gt;
+  &lt;li&gt;If the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Candidate&lt;/code&gt; (Node A) hears from a different peer (Node B) who claims to be &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt; for a term greater than or equal to the term that Node A is on, Node A stops its election, sets its term to Node B’s, enters the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Follower&lt;/code&gt; state, and begins listening for updates from the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Once a node becomes a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt;, it begins sending communications in the form of &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;AppendEntries&lt;/code&gt; (discussed more in the next section) messages to all other peers, and will continue trying to do so unless it hears about a different &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt; with a higher term (you may be wondering how Raft ensures that a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt; with an out of date state of the world doesn’t somehow acquire a higher term, but that topic is covered in the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Safety&lt;/code&gt; section).&lt;/p&gt;
+
+&lt;p&gt;To allow Raft to recover from a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt; failing (maybe because of an ethernet unplugging scenario), an up to date &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Follower&lt;/code&gt; can kick off an election.&lt;/p&gt;
+
+&lt;p&gt;&lt;label for=&quot;raft-states&quot; class=&quot;margin-toggle&quot;&gt;⊕&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;raft-states&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;marginnote&quot;&gt;&lt;img class=&quot;fullwidth&quot; src=&quot;https://firebasestorage.googleapis.com/v0/b/firescript-577a2.appspot.com/o/imgs%2Fapp%2FMivsh%2FNcIg3LfB_V.png?alt=media&amp;amp;token=28bc65f4-5a48-43ab-99cb-3b504392a356&quot; /&gt;&lt;br /&gt;Raft States&lt;/span&gt;&lt;/p&gt;
+
+&lt;p&gt;I found the visualization in the margin (from the original Raft paper) to be helpful for thinking about the ways that a node can transition between the three possible states of &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Follower&lt;/code&gt;, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Candidate&lt;/code&gt;, and &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt;.&lt;/p&gt;
+
+&lt;h2 id=&quot;raft-logs-and-replication&quot;&gt;Raft logs and replication&lt;/h2&gt;
+
+&lt;h3 id=&quot;what-is-an-appendentries-request-and-what-information-does-it-contain&quot;&gt;What is an AppendEntries request and what information does it contain?&lt;/h3&gt;
+&lt;p&gt;As mentioned above, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt; nodes periodically send &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;AppendEntries&lt;/code&gt; messages to &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Follower&lt;/code&gt; nodes to let the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Follower&lt;/code&gt;s know that there is still an active &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt;. 
+These &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;AppendEntries&lt;/code&gt; calls also serve the purpose of helping to update out of date &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Follower&lt;/code&gt;s with correct data to store in their logs.
+The information that the leader supplies in the calls is as follows:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;strong&gt;The &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader's&lt;/code&gt; current term -&lt;/strong&gt; as mentioned in the &lt;strong&gt;Leaders and leader election&lt;/strong&gt; section, if a node is a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Candidate&lt;/code&gt; or a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt;, hearing about a new or existing leader might require the node to take some action (like giving up on an election or stepping down as a &lt;em&gt;Leader&lt;/em&gt;).&lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;&lt;strong&gt;Log entries&lt;/strong&gt; (represented as an array) that the &lt;strong&gt;Leader&lt;/strong&gt; wants to propagate to peers, along with data about the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader's&lt;/code&gt; log that will help the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Follower&lt;/code&gt; make a decision about what to do with the new entries. In particular, the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt; sends data about the log entry that immediately preceded the entries it is sending. Because the data pertains to the previous log entry, the names of the variables are &lt;strong&gt;previousLogIndex&lt;/strong&gt; and &lt;strong&gt;previousLogTerm&lt;/strong&gt;.  &lt;label for=&quot;leader-log&quot; class=&quot;margin-toggle&quot;&gt;⊕&lt;/label&gt;&lt;input type=&quot;checkbox&quot; id=&quot;leader-log&quot; class=&quot;margin-toggle&quot; /&gt;&lt;span class=&quot;marginnote&quot;&gt;&lt;img class=&quot;fullwidth&quot; src=&quot;https://firebasestorage.googleapis.com/v0/b/firescript-577a2.appspot.com/o/imgs%2Fapp%2FMivsh%2FJ67QQC2tnw.png?alt=media&amp;amp;token=85f3bb55-1a92-4c85-bf89-804728cca996&quot; /&gt;&lt;br /&gt;Leader log&lt;/span&gt; For an example of how these variables are assigned, consider a Leader’s log as shown in the margin. If the leader wanted to update the follower with entries that are in positions 9 through 10, it would include those in the &lt;strong&gt;log entries&lt;/strong&gt; section of the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;AppendEntries&lt;/code&gt; call, setting &lt;strong&gt;previousLogIndex&lt;/strong&gt; to 8 and &lt;strong&gt;previousLogTerm&lt;/strong&gt; to 6.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;The &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader's&lt;/code&gt; &lt;strong&gt;commitIndex&lt;/strong&gt;: this is where the idea of &lt;strong&gt;committing&lt;/strong&gt; from the earlier part of this guide comes into play.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;what-happens-when-a-peer-receives-an-appendentries-request&quot;&gt;What happens when a peer receives an AppendEntries request?&lt;/h3&gt;
+&lt;p&gt;Once a peer receives an &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;AppendEntries&lt;/code&gt; request from a leader, it evaluates whether it will need to update its state, then responds with its current term as well as whether it successfully processed the request:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;strong&gt;If the receiving node has a greater term than the sending node&lt;/strong&gt;, the receiving node ignores the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;AppendEntries&lt;/code&gt; request and immediately communicates to the sending node that the request failed. This has the effect of causing the sending node to step down as a leader. A situation where this could arise is when a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt; is disconnected from the network, a new election succeeds (with a new term and Leader), then the old Leader is reconnected. Because Raft only allows one leader at a time, the old one should step down.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;If the receiving node has an equal term as the sending node, a few conditions need to be evaluated:&lt;/strong&gt;
+Firstly, if the receiving node is not a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Follower&lt;/code&gt;, it should immediately transition to being one. This behavior serves to notify candidates for the term that a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt; has been elected, as well as guarding against the existence of two &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leaders&lt;/code&gt;. Hitting this condition does not cause the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;AppendEntries&lt;/code&gt; request to return.
+    &lt;ul&gt;
+      &lt;li&gt;&lt;strong&gt;Once it has been checked that the receiving and sending nodes have the same term, we need to make sure that their logs match.&lt;/strong&gt; This check is performed by looking at the &lt;strong&gt;previousLogIndex&lt;/strong&gt; and &lt;strong&gt;previousLogTerm&lt;/strong&gt; of the sending node and comparing to the receiving node’s log. 
+As part of performing this check, a few scenarios arise.
+        &lt;ul&gt;
+          &lt;li&gt;&lt;strong&gt;In the match case&lt;/strong&gt;, the &lt;strong&gt;previousLogIndex&lt;/strong&gt; and &lt;strong&gt;previousLogTerm&lt;/strong&gt; of the sending node match the entry in the receiving node’s log, meaning that everything is up to date! If this is true, the receiving node can add the received entries to its log. The receiving node also checks whether the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt; has a newer commit index (meaning that the receiving node is able to update its commit index and apply messages that will affect its state)&lt;/li&gt;
+          &lt;li&gt;If the log for a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Follower&lt;/code&gt; is not up to date, the Leader will keep decrementing the &lt;strong&gt;previousLogIndex&lt;/strong&gt; for the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Follower&lt;/code&gt; and keep retrying the request until the logs match (the match case above is true) or it has been determined that all entries in the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Follower&lt;/code&gt; need to be replace&lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;raft-safety&quot;&gt;Raft Safety&lt;/h2&gt;
+&lt;p&gt;At the core of Raft are guarantees about safety that make sure that data in the log isn’t corrupted or lost. For example, imagine that a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt; starts coordinating changes to the log, does so successfully, then goes offline. While the existing &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt; is offline, a new &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt; is elected and the system continues updating the log. If the old &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt; were to come back online, how can we make sure that it isn’t able to rewind the system’s log?&lt;/p&gt;
+
+&lt;p&gt;To account for this situation (and all of the edge cases that can occur in distributed systems), Raft aims to implement several ideas around Safety. A few of these we’ve already touched on (descriptions are from Figure 3 of the original Raft paper):&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;strong&gt;Election Safety:&lt;/strong&gt; “There can at most be one leader at a time.” Discussed in &lt;strong&gt;Leaders and leader election&lt;/strong&gt;.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Leader Append-Only:&lt;/strong&gt; “a leader never overwrites or deletes entries in its log; it only appends new entries.” The leader never mutates it’s internal logs. Discussed in &lt;strong&gt;Raft logs and replication&lt;/strong&gt;.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Log Matching&lt;/strong&gt;: “if two logs contain an entry with the same index and term, then the logs are identical in all entries up through the given index.” If the leader doesn’t have logs that match followers, the leader will rewind the follower’s log entries, then send over the correct data. Discussed in &lt;strong&gt;Raft logs and replication&lt;/strong&gt;.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;The other important ideas around Raft Safety are:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;strong&gt;Leader Completeness&lt;/strong&gt;: “if a log entry is committed in a given term, then that entry will be present in the logs of the leaders for all higher-numbered terms”. The gist of this principle is to ensure that a leader has all log entries that should be stored permanently (&lt;strong&gt;committed&lt;/strong&gt;) by the system. To make the idea of Leader Completeness concrete, imagine a situation where a key-value store performs a put and then a delete - if the put operation was replicated, but the delete happened in a higher term and is not in the log of the leader, the state of the world will be incorrect, as the delete will not be processed. To ensure that leaders aren’t elected with stale logs, a node that receives a &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;RequestVote&lt;/code&gt; must check that the sender has a log where the last entry is of a greater term or of the same term and of a higher index. If the receiver determines that neither of those conditions is true, then it rejects the request.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;State Machine Safety&lt;/strong&gt;:  “if a server has applied a log entry at a given index to its state machine, no other server will ever apply a different log entry for the same index.” The gist of this principle is to ensure that a leader applies entries from its log in the correct order. To make the idea of State Machine Safety concrete, imagine a situation where a key-value store performs a put and then a delete (both of which are stored in individual log entries). If the put operation was applied, then the delete operation was applied, every other node must perform the same sequence of applications. A more detailed explanation of the proof is available in the Raft paper.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;conclusion&quot;&gt;Conclusion&lt;/h2&gt;
+&lt;p&gt;If you’ve made it to the end, thanks for following along and until next time!&lt;/p&gt;
+
+&lt;h3 id=&quot;references&quot;&gt;References&lt;/h3&gt;
+&lt;ul&gt;
+  &lt;li&gt;Raft Paper - &lt;a href=&quot;https://pdos.csail.mit.edu/6.824/papers/raft-extended.pdf&quot;&gt;https://pdos.csail.mit.edu/6.824/papers/raft-extended.pdf&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+</description>
+                            <pubDate>Sat, 09 May 2020 00:00:00 -0700</pubDate>
+                            <link>/2020/05/09/understanding-raft-consensus-part-2.html</link>
+                            <guid isPermaLink="true">/2020/05/09/understanding-raft-consensus-part-2.html</guid>
+                        </item>
+                    
+                
+                    
+                        <item>
+                            <title>Understanding Raft Consensus  - Part 1</title>
+                            <description>&lt;p&gt;Recently I was digging deeper into &lt;a href=&quot;https://raft.github.io/&quot;&gt;Raft&lt;/a&gt;, an important algorithm in the field of distributed systems. Raft is a &lt;strong&gt;consensus algorithm&lt;/strong&gt;, meaning that it is designed to facilitate a set of computers agreeing on a state of the world (more on exactly how the state of the world is represented later), even when communications between the computers in the set are interrupted (say for example, by someone accidentally unplugging a network cable that connects some of the nodes to the majority).&lt;/p&gt;
+
+&lt;p&gt;The problem of reliably storing a state of the world across many computers, keeping the state in sync, and scaling this functionality is required in a number of modern systems - for example, Kubernetes stores all cluster data in &lt;a href=&quot;https://kubernetes.io/docs/concepts/overview/components/#etcd&quot;&gt;etcd&lt;/a&gt;, a key-value store library that uses Raft under the hood.&lt;/p&gt;
+
+&lt;p&gt;Given how important (and nuanced) the algorithm is, I wanted to attempt to boil it down to its simplest possible components first, then followup with a deeper dive.&lt;/p&gt;
+
+&lt;p&gt;It’s worth noting that there are a wealth of resources about Raft. Some of my favorites are:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;A &lt;a href=&quot;https://www.youtube-nocookie.com/embed/YbZ3zDzDnrw&quot;&gt;video explanation of Raft&lt;/a&gt; created by the authors of the paper.&lt;/li&gt;
+  &lt;li&gt;A &lt;a href=&quot;http://thesecretlivesofdata.com/raft/&quot;&gt;visualization&lt;/a&gt; of how Raft works&lt;/li&gt;
+  &lt;li&gt;An excellent walkthrough of a Raft implementation (with documentation) by Eli Bendersky, &lt;a href=&quot;https://eli.thegreenplace.net/2020/implementing-raft-part-0-introduction/&quot;&gt;available here&lt;/a&gt;.&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://pdos.csail.mit.edu/6.824/labs/lab-raft.html&quot;&gt;Lab 2 from MIT’s 6.824 course&lt;/a&gt;, which comes with a full test suite and guidance on how to implement the algorithm in manageable chunks.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;whats-novel-about-raft&quot;&gt;What’s novel about Raft?&lt;/h2&gt;
+&lt;p&gt;As mentioned above, Raft is an algorithm designed to help computers synchronize state through a process called &lt;strong&gt;consensus&lt;/strong&gt;, although it was not the first system designed to do so.&lt;/p&gt;
+
+&lt;p&gt;A main difference between Raft and previous consensus algorithms was the desire to optimize the design with simplicity in mind - a trait that the authors thought was missing from existing research.&lt;/p&gt;
+
+&lt;p&gt;In particular, Raft aimed to improve on &lt;a href=&quot;https://www.microsoft.com/en-us/research/uploads/prod/2016/12/paxos-simple-Copy.pdf&quot;&gt;Paxos&lt;/a&gt;, a groundbreaking but (the authors of Raft argue) somewhat complicated set of ideas for achieving distributed consensus.&lt;/p&gt;
+
+&lt;p&gt;To attempt to quantify the complexity of Paxos, the Raft authors conducted a survey at NSDI, one of the top conferences for distributed systems academics:&lt;/p&gt;
+&lt;blockquote&gt;
+  &lt;p&gt;In an informal survey of attendees at NSDI 2012, we found few people who were comfortable with Paxos, even among seasoned researchers. We struggled with Paxos ourselves; we were not able to understand the complete protocol until after reading several simplified explanations and designing our own alternative protocol, a process that took almost a year.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;Other engineers also documented difficultes productionizing Paxos. Google implemented a system based off of Paxos called &lt;a href=&quot;https://static.googleusercontent.com/media/research.google.com/en//archive/chubby-osdi06.pdf&quot;&gt;Chubby&lt;/a&gt; and &lt;a href=&quot;http://www.read.seas.harvard.edu/~kohler/class/08w-dsi/chandra07paxos.pdf&quot;&gt;documented the “algorithmic and engineering challenges … encountered in moving Paxos from theory to practice&lt;/a&gt;. In their paper they note that, “Despite the existing literature on the subject [Paxos], building a production system turned out to be a non-trivial task for a variety of reasons”.&lt;/p&gt;
+
+&lt;p&gt;From the above commentary, it might seem that Paxos is a terribly complicated and near-impossible set of ideas to implement, although this isn’t entirely true. Some have argued that Raft trades off understability for a performance hit, although it is unclear whether this is true given the latest &lt;a href=&quot;https://github.com/etcd-io/etcd/blob/master/Documentation/op-guide/performance.md&quot;&gt;etcd benchmarks&lt;/a&gt;. For further reading on Paxos vs Raft, &lt;a href=&quot;https://arxiv.org/pdf/2004.05074.pdf&quot;&gt;this paper&lt;/a&gt; is an interesting read.&lt;/p&gt;
+
+&lt;h2 id=&quot;at-a-high-level-how-does-raft-work&quot;&gt;At a high level, how does Raft work?&lt;/h2&gt;
+
+&lt;p&gt;Now that we have some context about the &lt;em&gt;why?&lt;/em&gt; of Raft, there are a few high level points that are important to understand about Raft:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;strong&gt;The purpose of the Raft algorithm&lt;/strong&gt; is to replicate a state of the world across a cluster of computers. Rather than sending single messages that contain the complete state of the world, Raft consensus involves a log of incremental changes, represented internally as an array of commands. A key value store can be used as a more concrete example of representing the state of world with in this way - the current state of the world in a KV store contains the keys and values for those keys, but each &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;put&lt;/code&gt;, or &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;delete&lt;/code&gt; is a single change that leads to that state. These individual changes can be stored in an append-only log format (the 2nd part of this series goes into more detail on how the log component of Raft works in the &lt;strong&gt;Raft logs and replication&lt;/strong&gt; section).&lt;/li&gt;
+  &lt;li&gt;Raft peers communicate using &lt;strong&gt;well-defined messages&lt;/strong&gt;. There are several defined in the original paper, but the two essential ones are:
+    &lt;ul&gt;
+      &lt;li&gt;&lt;strong&gt;RequestVote&lt;/strong&gt;: a message used by Raft to elect a peer that coordinates updating the state of the world. More info in the &lt;strong&gt;Leaders and leader election&lt;/strong&gt; section of Part 2.&lt;/li&gt;
+      &lt;li&gt;&lt;strong&gt;AppendEntries&lt;/strong&gt;: a message used by Raft to allow peers to communicate about changes to the state of the world. More details of how the state is replicated in the &lt;strong&gt;Raft logs and replication&lt;/strong&gt; section.&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Members of a Raft cluster are called peers and can be in one of three states&lt;/strong&gt;:
+    &lt;ul&gt;
+      &lt;li&gt;&lt;strong&gt;Leader:&lt;/strong&gt; the node that coordinates other nodes in the cluster to update their state. All changes to the state of the world flow through the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Leader&lt;/code&gt;.&lt;/li&gt;
+      &lt;li&gt;&lt;strong&gt;Candidate&lt;/strong&gt;: the node is vying to become a leader&lt;/li&gt;
+      &lt;li&gt;&lt;strong&gt;Follower&lt;/strong&gt;: the node is receiving instructions about how to update its state from a leader&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;A &lt;strong&gt;Leader&lt;/strong&gt; manages updates to the state of the world by taking two types of actions: &lt;strong&gt;committing&lt;/strong&gt; and &lt;strong&gt;applying&lt;/strong&gt;. The leader &lt;strong&gt;commits&lt;/strong&gt; to an index in its log (called a &lt;strong&gt;commitIndex&lt;/strong&gt;) once a majority of the nodes in the network have acknowledged that they’ve also stored the entry successfully. When a node moves its &lt;strong&gt;commitIndex&lt;/strong&gt; forward in the log (the &lt;strong&gt;commitIndex&lt;/strong&gt; can only move forward, never backward!), it &lt;strong&gt;applies&lt;/strong&gt; (processes) entries in the log up to where it is committed. The ideas of committing and applying ensure that a Leader doesn’t update its state of the world until it is guaranteed that the log that led to that state is impossible to change - more info on the “impossible to change” idea in the next article’s &lt;strong&gt;Safety&lt;/strong&gt; section.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;With that context, we can start breaking Raft down into more concrete sections that try to answer questions about the protocol:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;strong&gt;Leaders and leader election&lt;/strong&gt; covers how updates to a Raft
+cluster’s state are coordinated: Which computer is coordinating
+changes to the state of the world, how does this computer
+coordinate with other computers in the Raft cluster, and for how
+long does the computer coordinate?&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Raft logs and replication&lt;/strong&gt; covers the mechanism of state being
+replicated: How does the state of the world get propagated to other
+computers in the cluster? How do other computers get new information about the state of the world if they were disconnected, but are now back online (someone unplugged the computer’s ethernet cable)?&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Safety&lt;/strong&gt; covers how Raft guards against edge cases that could corrupt the state of the world: How do we make sure that a computer with an old state of the world does not accidentally overwrite another computer’s updated state of the world?&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Given that this article is already fairly lengthy, I saved the three topics outlined above for the second part of the series, &lt;a href=&quot;/2020/05/09/understanding-raft-consensus-part-2.html&quot;&gt;available here&lt;/a&gt;.&lt;/p&gt;
+</description>
+                            <pubDate>Fri, 08 May 2020 00:00:00 -0700</pubDate>
+                            <link>/2020/05/08/understanding-raft-consensus.html</link>
+                            <guid isPermaLink="true">/2020/05/08/understanding-raft-consensus.html</guid>
+                        </item>
+                    
+                
+                    
+                        <item>
+                            <title>Understanding Google&amp;#8217;s File System</title>
+                            <description>&lt;p&gt;Today I read &lt;a href=&quot;http://static.googleusercontent.com/media/research.google.com/en//archive/gfs-sosp2003.pdf&quot;&gt;the original paper&lt;/a&gt; about the Google File System (GFS), a system that provided the storage layer for many of Google’s applications in the company’s early days. The original implementation has reportedly been replaced by a newer version called Colossus, but reading about the original approach was still illuminating and I thought I’d do a quick write up about it.&lt;/p&gt;
+
+&lt;h3 id=&quot;why-iswas-gfs-such-a-big-deal&quot;&gt;Why is/was GFS such a big deal?&lt;/h3&gt;
+
+&lt;p&gt;The original paper was published in 2003 at SOSP (Symposium on Operating Systems Principles - one of, if not the, best conferences for operating systems research).&lt;/p&gt;
+
+&lt;p&gt;GFS made it onto the program because of how revolutionary it was at the time - the accompanying paper detailed how Google had successfully implemented academic ideas of weak consistency and reliance on a single master controller (more on this later) at tremendous scale in an industry application.&lt;/p&gt;
+
+&lt;p&gt;The ultimate goal of GFS was to provide a replicated storage layer (redundant copies of data are kept across many machines) across the commodity level machines in a Google datacenter. The original motivation for developing such a system was to power batch jobs, although the system eventually powered other projects.&lt;/p&gt;
+
+&lt;p&gt;Because GFS was designed for batch jobs, it primarily optimized for appending to, rather than modifying, files. Users of the program were generally writing large files out at once rather than making modifications to specific parts of a file.&lt;/p&gt;
+
+&lt;h3 id=&quot;what-are-the-abstractions-that-power-gfs&quot;&gt;What are the abstractions that power GFS?&lt;/h3&gt;
+
+&lt;p&gt;At the core of GFS is a concept called &lt;strong&gt;chunks&lt;/strong&gt;. Chunks are used to split up files into fixed-size 64MB segments that are then replicated around the datacenter &lt;a href=&quot;#footnotes&quot;&gt;†&lt;/a&gt;. Chunks are referred to by &lt;strong&gt;chunk handles&lt;/strong&gt;, basically unique ids for a chunk. Splitting a large file into many chunks, then replicating those chunks across many machines accomplished two goals: improving performance (as there could now be many readers and writers of a single file), and allowing huge files to exist behind a simple abstraction.&lt;/p&gt;
+
+&lt;p&gt;To make the idea of how this abstraction works more concrete, imagine using a library to open a file on a disk. Behind the scenes, that library now goes out and fetches all of the different pieces of the file you requested from computers all around your datacenter, then provides a transparent way to interact with the stitched together data &lt;a href=&quot;#footnotes&quot;&gt;†&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;The aforementioned library (called by your user program, the Client) performs fetching and writing operations by interacting with several components of GFS:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;strong&gt;Master&lt;/strong&gt;: The master has a few responsibilties. To start, it is the first point of contact for a client when they want to interact with GFS. In addition to that function, the master is also responsible for communicating with a set of &lt;strong&gt;chunk servers&lt;/strong&gt; that host chunks. To perform its functions, the master stores a few tables in RAM:
+    &lt;ul&gt;
+      &lt;li&gt;A mapping from filenames to &lt;strong&gt;chunk handles&lt;/strong&gt; (chunk handles are basically IDs for chunks).&lt;/li&gt;
+      &lt;li&gt;A mapping from &lt;strong&gt;chunk handles&lt;/strong&gt; to a list of the machines that the chunk is on, versioning information about the chunk (a piece of data to help with managing multiple writes to the same chunk), and two pieces of information related to managing writes to that chunk - the primary and the lease. I’ll cover the primary and the lease in the next section.&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Chunk Server&lt;/strong&gt;: Chunk servers handle work around writing to and reading from disk. A client starts talking to them after being told to do so by the master.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;how-does-writing-and-reading-to-gfs-work&quot;&gt;How does writing and reading to GFS work?&lt;/h3&gt;
+
+&lt;h4 id=&quot;reading-from-gfs&quot;&gt;Reading from GFS&lt;/h4&gt;
+&lt;p&gt;To read a file to GFS, a client says to the master, “I would like to read this byte offset in this file”, where the file looks like a regular file system path.&lt;/p&gt;
+
+&lt;p&gt;The master then receives the request from the client and calculates which chunk corresponds to the associated file and byte offset. Using the chunk handle of the calculated chunk, the master then gets the list of chunk servers that store the aforementioned chunk and provides it to the client. The client then chooses a chunk server, contacting it with the chunk and offset it wants, then is provided with the requested data.&lt;/p&gt;
+
+&lt;p&gt;Along the way, the client also caches information about the chunk and the chunkservers it can find that chunk on if it needs to rerequest the chunk.&lt;/p&gt;
+
+&lt;h4 id=&quot;writing-to-gfs&quot;&gt;Writing to GFS&lt;/h4&gt;
+
+&lt;p&gt;Writing (in this case, appending) to files in GFS is significantly more complicated than reading from GFS.&lt;/p&gt;
+
+&lt;p&gt;To start a client, asks the master for a specific file’s last chunk (the end of the file is necessary because we are appending). The master then checks its tables for information on that chunk, using the returned chunk handle (the chunk handle is essentially the ID of the chunk).&lt;/p&gt;
+
+&lt;p&gt;The master then inspects two pieces of information that it is storing about each chunk - the primary and lease fields.&lt;/p&gt;
+
+&lt;p&gt;The &lt;strong&gt;primary&lt;/strong&gt; is a reference to a chunk server that has been assigned to coordinate writes among chunk servers. This assignment is short lived, and is governed by the expiration of the &lt;strong&gt;lease&lt;/strong&gt;. When the lease runs out, the master can assign a new chunk server to coordinate writes.&lt;/p&gt;
+
+&lt;p&gt;If the chunk that a client requests does not have a &lt;strong&gt;primary&lt;/strong&gt; assigned, the master assigns one, and increments the version of the data. Incrementing the version number allows the master to keep track of which data is the most recent. If the chunk already has a primary, this step is skipped.&lt;/p&gt;
+
+&lt;p&gt;The next step is to transmit information about the primary and secondaries (chunk servers that have the chunk, but aren’t the primary) to the client. From there, the client sends the data it wants to write to the respective chunk servers. After all chunk servers have the data, the client tells the primary to write it. The primary chunk server chooses a byte offset in the chunk (whatever the end of the file is), and sends it to all of the secondaries, after which all of them perform the right.&lt;/p&gt;
+
+&lt;p&gt;If the primary and all secondaries write, the client receives a success! If not all secondaries write, the client receives a failure, at which point it needs to recontact the master and repeat the process from the beginning.&lt;/p&gt;
+
+&lt;h3 id=&quot;wrapping-up&quot;&gt;Wrapping up&lt;/h3&gt;
+
+&lt;p&gt;I &lt;a href=&quot;https://queue.acm.org/detail.cfm?id=1594206&quot;&gt;found an interview&lt;/a&gt; with one of the engineers who worked on GFS to be fairly interesting. GFS was very successful for the applications it was designed for and reached wide adoption within Google.&lt;/p&gt;
+
+&lt;p&gt;Unfortunately, it didn’t scale as well to new use cases for a few reasons. First off, the system used a single master process to store of chunk servers in addition to other metadata. Having all of this information in RAM on a single machine only went so far.&lt;/p&gt;
+
+&lt;p&gt;Another issue that GFS ran into was in storing small files. For example, if a user wanted to store many files smaller than the chunk size, the master needed to store an entry for each file, and allocate the full chunk size on disk. Google ended up working on other systems and making tweaks to GFS to solve this problem (in particular, one of the systems that is discusses is BigTable).&lt;/p&gt;
+
+&lt;h3 id=&quot;footnotes&quot;&gt;Footnotes:&lt;/h3&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;a name=&quot;#1&quot;&gt;[1]&lt;/a&gt; Google’s new storage system would try to decrease the chunk size for reasons that I talk about at the end of this post.&lt;/li&gt;
+  &lt;li&gt;&lt;a name=&quot;#2&quot;&gt;[2]&lt;/a&gt; Whether the data is actually stitched together or not is somewhat of an implementation detail&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h3 id=&quot;references&quot;&gt;References:&lt;/h3&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;[1] &lt;a href=&quot;http://static.googleusercontent.com/media/research.google.com/en//archive/gfs-sosp2003.pdf&quot;&gt;GFS paper&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;[2] &lt;a href=&quot;https://www.youtube.com/watch?v=EpIgvowZr00&amp;amp;feature=emb_title&quot;&gt;MIT Distributed Systems lecture on GFS&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;[3] &lt;a href=&quot;https://cs.stanford.edu/~matei/courses/2015/6.S897/slides/gfs.pdf&quot;&gt;Talk about GFS from Firas Abuzaid&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</description>
+                            <pubDate>Sun, 22 Mar 2020 00:00:00 -0700</pubDate>
+                            <link>/2020/03/22/understanding-googles-file-system.html</link>
+                            <guid isPermaLink="true">/2020/03/22/understanding-googles-file-system.html</guid>
+                        </item>
+                    
+                
+                    
+                        <item>
+                            <title>2019 year in review &amp; looking ahead in 2020</title>
+                            <description>&lt;p&gt;Last year I &lt;a href=&quot;https://www.micahlerner.com/post/2019/01/13/NewBlog.html&quot;&gt;wrote up&lt;/a&gt; a few of my goals for learning, and I wanted to repeat the exercise for this year. Planning for last year, even in rough terms, helped me sketch out a path and think about what I wanted to explore. I ended up writing and publishing 4 articles over the course of the year, much better than 2018. Also, talking about what I wanted to learn led to some encouraging words from friends and mentors, and prompted discussions where I shared what I had been learning with people who were interested.&lt;/p&gt;
+
+&lt;h2 id=&quot;what-went-well&quot;&gt;What went well&lt;/h2&gt;
+&lt;p&gt;I did a few things right when it came to my learning goals in 2019:&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;strong&gt;Morning schedule&lt;/strong&gt;: I became a morning person after a few weeks of trying to be productive after work wasn’t working out as well as I would have hoped. Before making the change, I would sometimes get home drained of the energy I was expecting to spend learning new things. I eventually settled into waking up early, working out, learning for a few hours, then starting my work day as everyone else was. The new schedule also allowed me to work as late as needed without having to feel stressed about fitting in the time I was yearning for.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Following my interests/passions&lt;/strong&gt;: I really dove into subjects that I found myself excited about, even if they were off the rough path that I was expecting to follow. For example, I didn’t plan on bug bounty hunting at all, even though I spent a much of December doing it.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;what-could-have-gone-better&quot;&gt;What could have gone better&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;strong&gt;Sharing with more frequency&lt;/strong&gt;: I followed my interests in a relatively unstructured way (the proverbial “going down the rabbithole”), but I didn’t write much as I was going along. I think I didn’t end up writing frequently because of two factors: I wasn’t actively thinking about topics to write about, and some of the things I was learning didn’t seem like they would be interesting if shared piecemeal. Actively thinking about writing, as well as keeping the “ship early, ship often” mindset top-of-mind, will not only result in me writing more, but also will help me interest more people in what I’m writing about.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;More building&lt;/strong&gt;: I feel that I overweighted absorbing new information over the last year, and underweighted building things with that information. With some of the things that I want to explore this year, I think I’ll have a chance to equalize how I spend my time between building and consuming.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Better goal setting&lt;/strong&gt;: I didn’t write as much as much as I wanted to (although still more than the year before), and I didn’t start a few of the things I wanted to try out (for example, CryptoPals and Microcorruption). Learning new things shouldn’t be a job, but setting better goals would be helpful for prioritizing and focusing my learning.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;what-i-want-to-learn-more-about-in-2020&quot;&gt;What I want to learn more about in 2020&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;strong&gt;Machine Learning / Deep Learning&lt;/strong&gt;: ML is top of mind for me again this year, although I didn’t spend as much time on it in 2019. I’ve decided to explore in a few directions, and I will write more about that soon. I’d also like to compete in at least one machine-learning-centric competion this year. Ideally this would be with dataset I’m excited about, like one from satellites. I’m also excited to read ML research and attempt to write about it, similar to what &lt;a href=&quot;https://blog.acolyer.org/&quot;&gt;The Morning Paper&lt;/a&gt; does with Distributed Systems research.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Math&lt;/strong&gt;: I’ve been wanting to deepen my math knowledge for a while and have a few ideas about how to do so. I’m motivated to expand my expertise in Math because it seems fun (and useful while I dig into ML). I’d like to flex a few math muscles (calculus, linear algebra, and statistics) I haven’t flexed in a bit, read a &lt;a href=&quot;https://jeremykun.com/2018/12/01/a-programmers-introduction-to-mathematics/&quot;&gt;Programmer’s Introduction to Math&lt;/a&gt;, and try out &lt;a href=&quot;https://github.com/fastai/numerical-linear-algebra/blob/master/README.md&quot;&gt;Computational Linear Algebra&lt;/a&gt;. Beyond that, we’ll see where the journey takes me. Thankfully, there are a few good resources from &lt;a href=&quot;https://news.ycombinator.com/item?id=8996024&quot;&gt;Hacker News&lt;/a&gt; and &lt;a href=&quot;http://steve-yegge.blogspot.com/2006/03/math-for-programmers.html&quot;&gt;Steve Yegge&lt;/a&gt; (ex-Google engineer) on good places to start with respect to self-learning math.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Distributed Systems&lt;/strong&gt; - I’ve been reading &lt;a href=&quot;https://blog.acolyer.org/&quot;&gt;The Morning Paper&lt;/a&gt; for a while and quite like the format that the author follows for summarizing research. Reading about how large-scale systems are designed is fascinating, and Adrian provided good tips for finding cutting edge research in this field (among others). Reading papers and talking about them would also give me a great opportunity to write.&lt;/li&gt;
+  &lt;li&gt;&lt;strong&gt;Mandarin&lt;/strong&gt;: I’ve been learning Mandarin! It’s fun and challenging. I’d like to practice Mandarin 30 minutes every day for the rest of 2020.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;The first three areas I’m interested in are hard to set goals for, although with the motivation of shipping early and often, I’d like to write at least one new post a month about whatever topic I’m currently in the weeds with. This goal strikes the right balance between being a forcing function while remaining flexible enough to let me explore whatever rabbithole I’m currently in.&lt;/p&gt;
+
+&lt;p&gt;As for learning Mandarin, thankfully the apps I’m using (Duolingo and LingoDeer) track progress fairly well, although depending on how much time I have, I might end up taking an in-person class as well…we’ll see.&lt;/p&gt;
+
+&lt;p&gt;Until next time!&lt;/p&gt;
+</description>
+                            <pubDate>Sun, 01 Mar 2020 00:00:00 -0800</pubDate>
+                            <link>/yearly/review/2020/03/01/looking-ahead-in-2020.html</link>
+                            <guid isPermaLink="true">/yearly/review/2020/03/01/looking-ahead-in-2020.html</guid>
+                        </item>
+                    
+                
         </channel>
 </rss>

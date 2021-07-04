@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name="generator" content="Hugo 0.16" /><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+
+        <title>Micah Lerner</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+        <meta http-equiv="pragma" content="no-cache">
+        <meta name="robots" content="all">
+        <meta name="MSSmartTagsPreventParsing" content="true">
+        <meta http-equiv="imagetoolbar" content="false">
+
+        <link href="/css/tufte.css" rel="stylesheet">
+
+    </head>
+
+    <body>
+        <article>
+    <section>
+        <header>
+            <a href="/">
+                <h3>micahlerner.com</h3>
+            </a>
+        </header>
+    </section>
+    <h1>A simple introduction Bitcoin Lightning [Part 1]</h1>
+    
+    <h4>Published January 12, 2019</h4>
+    <h5>
+        Found something wrong? <a href="https://github.com/mlerner/mlerner.github.io">Submit a pull request!</a>
+    </h5>
+    <section>
+        <p>I’ve seen several explanations of Lightning, and all of them have seemed overly
+complex, or have required substantial prior knowledge. As part of a “Paper
+Club” (??? link to Hunter) I helped lead at Bitwise, I really got into the
+nitty gritty of how Lightning works, and was able to scope out parts of the
+protocol that I didn’t understand. Notably, this article focuses only on how
+payment channels, one of the main features of Lightning, works. There are other
+components to the protocol, but if one understands payment channels, you have
+gotten most of the knowledge needed to go a step further to understand routing,
+HTLCs and other more advanced topics that I will cover in a future post. This
+post does require some prior knowledge about Bitcoin, which is mostly covered 
+in a chapter of <a href="https://www.oreilly.com/library/view/mastering-bitcoin/9781491902639/ch02.html">Mastering
+Bitcoin</a>.</p>
+
+<p>As a quick review, one must understand how a Bitcoin transaction is structured.
+A Bitcoin transaction contains inputs and outputs. The inputs point to
+previously created outputs resulting from other transactions. Inputs require
+signatures that authorize the spending of the outputs that are being used.
+Bitcoin transactions are bundled together by miners and placed in a block that
+points at a previous block.</p>
+
+
+        <footer>
+            <form
+                action="https://gmail.us20.list-manage.com/subscribe/post?u=d1654f70a6addb0e9ce8afd83&amp;id=bab65ed2b1"
+                method="post" id="mc-embedded-subscribe-form" name="mc-embedded-subscribe-form" class="validate"
+                target="_blank" novalidate>
+                <div id="mc_embed_signup_scroll">
+                    <h4>Follow me on <a href="https://twitter.com/micahlerner">Twitter</a> or subscribe below to get future paper reviews. Published
+                        weekly.</h4>
+                    <div>
+                        <input type="email" value="" name="EMAIL" class="email" id="mce-EMAIL"
+                            placeholder="email address" required>
+                        <!-- real people should not fill this in and expect good things - do not remove this or risk form bot signups-->
+                        <div style="position: absolute; left: -5000px;" aria-hidden="true">
+                            <input type="text" name="b_d1654f70a6addb0e9ce8afd83_bab65ed2b1" tabindex="-1" value="">
+                        </div>
+                        <input type="submit" value="Subscribe" name="subscribe" id="mc-embedded-subscribe"
+                            class="button">
+
+                    </div>
+                </div>
+            </form>
+        </footer>
+    </section>
+    <section>
+        Found something wrong? <a href="https://github.com/mlerner/mlerner.github.io">Submit a pull request!</a>
+    </section>
+</article>
+    </body>
+
+    <script>
+window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+ga('create', 'UA-89923715-1', 'auto');
+ga('send', 'pageview');
+    </script>
+    <script async src='//www.google-analytics.com/analytics.js'></script>
+
+</html>

@@ -1,7 +1,23 @@
----
-layout: default
----
-<article>
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta name="generator" content="Hugo 0.16" /><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+
+        <title>Micah Lerner</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+        <meta http-equiv="pragma" content="no-cache">
+        <meta name="robots" content="all">
+        <meta name="MSSmartTagsPreventParsing" content="true">
+        <meta http-equiv="imagetoolbar" content="false">
+
+        <link href="/css/tufte.css" rel="stylesheet">
+
+    </head>
+
+    <body>
+        <article>
     <h2>Micah Lerner</h2>
     <section>
         <p>
@@ -19,28 +35,137 @@ layout: default
         <div style="padding-top: 20px">
             <h3>Recent writing</h3>
             <ul style="list-style: none; padding-left: 0px;">
-                {% for post in site.posts %}
-                {% unless post.tags contains 'draft' %}
+                
+                
                 <li>
-                    <p><a href="{{post.url}}">{{post.title}}</a> - {{ post.date | date: '%B %d, %Y' }}</p>
-                    <!-- <p>Published {{ post.date | date: '%B %d, %Y' }} </p> -->
+                    <p><a href="/2021/06/27/ray-a-distributed-framework-for-emerging-ai-applications.html">Ray: A Distributed Framework for Emerging AI Applications</a> - June 27, 2021</p>
+                    <!-- <p>Published June 27, 2021 </p> -->
                 </li>
-                {% endunless %}
-                {% endfor %}
+                
+                
+                
+                <li>
+                    <p><a href="/2021/06/17/firecracker-lightweight-virtualization-for-serverless-applications.html">Firecracker: Lightweight Virtualization for Serverless Applications</a> - June 17, 2021</p>
+                    <!-- <p>Published June 17, 2021 </p> -->
+                </li>
+                
+                
+                
+                <li>
+                    <p><a href="/2021/06/12/foundationdb-a-distributed-unbundled-transactional-key-value-store.html">FoundationDB: A Distributed Unbundled Transactional Key Value Store</a> - June 12, 2021</p>
+                    <!-- <p>Published June 12, 2021 </p> -->
+                </li>
+                
+                
+                
+                <li>
+                    <p><a href="/2021/05/31/scaling-memcache-at-facebook.html">Scaling Memcache at Facebook</a> - May 31, 2021</p>
+                    <!-- <p>Published May 31, 2021 </p> -->
+                </li>
+                
+                
+                
+                <li>
+                    <p><a href="/2021/05/23/reflecting-on-2020.html">Reflecting on 2020</a> - May 23, 2021</p>
+                    <!-- <p>Published May 23, 2021 </p> -->
+                </li>
+                
+                
+                
+                <li>
+                    <p><a href="/2021/03/28/noria-dynamic.html">Noria: dynamic, partially-stateful data-flow for high-performance web applications</a> - March 28, 2021</p>
+                    <!-- <p>Published March 28, 2021 </p> -->
+                </li>
+                
+                
+                
+                <li>
+                    <p><a href="/2020/05/09/understanding-raft-consensus-part-2.html">Understanding Raft - Part 2 (Raft leaders, logs, and safety)</a> - May 09, 2020</p>
+                    <!-- <p>Published May 09, 2020 </p> -->
+                </li>
+                
+                
+                
+                <li>
+                    <p><a href="/2020/05/08/understanding-raft-consensus.html">Understanding Raft Consensus  - Part 1</a> - May 08, 2020</p>
+                    <!-- <p>Published May 08, 2020 </p> -->
+                </li>
+                
+                
+                
+                <li>
+                    <p><a href="/2020/03/22/understanding-googles-file-system.html">Understanding Google&#8217;s File System</a> - March 22, 2020</p>
+                    <!-- <p>Published March 22, 2020 </p> -->
+                </li>
+                
+                
+                
+                <li>
+                    <p><a href="/yearly/review/2020/03/01/looking-ahead-in-2020.html">2019 year in review & looking ahead in 2020</a> - March 01, 2020</p>
+                    <!-- <p>Published March 01, 2020 </p> -->
+                </li>
+                
+                
+                
+                <li>
+                    <p><a href="/post/2019/01/12/NewBlog.html">A new year of learning and writing</a> - January 12, 2019</p>
+                    <!-- <p>Published January 12, 2019 </p> -->
+                </li>
+                
+                
             </ul>
         </div>
         <div style="padding-top: 20px">
             <h3>Recent fragments</h3>
             <ul style="list-style: none; padding-left: 0px;">
-                {% for post in site.fragments reversed %}
-                {% unless post.tags contains 'draft' %}
+                
+                
                 <li>
-                    <p><a href="{{post.url}}">{{post.title}}</a> - {{ post.date | date: '%B %d, %Y' }}</p>
-                    <!-- <p>Published {{ post.date | date: '%B %d, %Y' }} </p> -->
+                    <p><a href="/fragments/drovorub-and-fancy-bear">Drovorub and Fancy Bear</a> - August 21, 2020</p>
+                    <!-- <p>Published August 21, 2020 </p> -->
                 </li>
-                {% endunless %}
-                {% endfor %}
+                
+                
+                
+                <li>
+                    <p><a href="/fragments/thoughts-on-reviewing-books">Thoughts on reviewing books</a> - June 13, 2020</p>
+                    <!-- <p>Published June 13, 2020 </p> -->
+                </li>
+                
+                
+                
+                <li>
+                    <p><a href="/fragments/Bug-Bounty-Hunting">Getting started in Bug Bounty Hunting</a> - December 17, 2019</p>
+                    <!-- <p>Published December 17, 2019 </p> -->
+                </li>
+                
+                
+                
+                <li>
+                    <p><a href="/fragments/RE">Diving into Reverse Engineering</a> - July 22, 2019</p>
+                    <!-- <p>Published July 22, 2019 </p> -->
+                </li>
+                
+                
+                
+                <li>
+                    <p><a href="/fragments/CTFs">The Cybersecurity Rabbithole</a> - June 02, 2019</p>
+                    <!-- <p>Published June 02, 2019 </p> -->
+                </li>
+                
+                
             </ul>
         </div>
     </section>
 </article>
+
+    </body>
+
+    <script>
+window.ga=window.ga||function(){(ga.q=ga.q||[]).push(arguments)};ga.l=+new Date;
+ga('create', 'UA-89923715-1', 'auto');
+ga('send', 'pageview');
+    </script>
+    <script async src='//www.google-analytics.com/analytics.js'></script>
+
+</html>

@@ -1,8 +1,0 @@
-author: 'Micah'
-title: www.micahlerner.com
-collections:
-  fragments:
-    output: true
-    permalink: /:collection/:title
-  drafts:
-    output: true
